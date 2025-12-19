@@ -2,80 +2,127 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Scratch Project Player</title>
+<title>Neon Scratch Player</title>
+
 <style>
-  body {
-    background: #111;
-    color: white;
-    font-family: sans-serif;
-    text-align: center;
-  }
-  canvas {
-    background: white;
-    border: 2px solid #444;
-  }
-  button {
-    font-size: 16px;
-    margin: 5px;
-    padding: 6px 12px;
-  }
+:root {
+  --neon: #00fff7;
+  --bg: #05060a;
+  --panel: #0b0f1a;
+}
+
+* {
+  box-sizing: border-box;
+  font-family: "Segoe UI", sans-serif;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at top, #0b1c2d, var(--bg));
+  color: white;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.container {
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow:
+    0 0 20px var(--neon),
+    inset 0 0 20px rgba(0,255,247,0.2);
+  width: 520px;
+}
+
+.title {
+  text-align: center;
+  font-size: 24px;
+  color: var(--neon);
+  text-shadow: 0 0 10px var(--neon);
+  margin-bottom: 15px;
+}
+
+.controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+input {
+  flex: 1;
+  background: black;
+  border: 2px solid var(--neon);
+  border-radius: 10px;
+  padding: 10px;
+  color: var(--neon);
+  font-size: 16px;
+  outline: none;
+  box-shadow: 0 0 10px rgba(0,255,247,0.5);
+}
+
+button {
+  background: black;
+  border: 2px solid var(--neon);
+  border-radius: 10px;
+  padding: 10px 16px;
+  color: var(--neon);
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 0 0 12px rgba(0,255,247,0.6);
+  transition: 0.2s;
+}
+
+button:hover {
+  background: var(--neon);
+  color: black;
+  box-shadow: 0 0 20px var(--neon);
+}
+
+.player {
+  width: 100%;
+  height: 402px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 0 25px rgba(0,255,247,0.5);
+}
+
+iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
 </style>
 </head>
 <body>
 
-<h2>Scratch Project Player</h2>
+<div class="container">
+  <div class="title">⚡ Neon Scratch Player</div>
 
-<canvas id="stage" width="480" height="360"></canvas><br>
+  <div class="controls">
+    <input id="projectId" placeholder="Enter Scratch Project ID" value="1000">
+    <button onclick="loadProject()">LOAD</button>
+  </div>
 
-<input type="file" id="fileInput" accept=".sb3">
-<br>
-<button id="greenFlag">▶ Green Flag</button>
-<button id="stopAll">■ Stop</button>
-
-<!-- Scratch libraries -->
-<script src="https://unpkg.com/scratch-vm@latest/dist/web/scratch-vm.js"></script>
-<script src="https://unpkg.com/scratch-render@latest/dist/web/scratch-render.js"></script>
-<script src="https://unpkg.com/scratch-audio@latest/dist/web/scratch-audio.js"></script>
-<script src="https://unpkg.com/scratch-storage@latest/dist/web/scratch-storage.js"></script>
+  <div class="player">
+    <iframe id="player"
+      src="https://scratch.mit.edu/projects/1000/embed"
+      allowfullscreen>
+    </iframe>
+  </div>
+</div>
 
 <script>
-const canvas = document.getElementById("stage");
-
-const vm = new window.ScratchVM();
-const renderer = new window.ScratchRender(canvas);
-const audioEngine = new window.ScratchAudio.SoundEngine();
-const storage = new window.ScratchStorage();
-
-vm.attachRenderer(renderer);
-vm.attachAudioEngine(audioEngine);
-vm.attachStorage(storage);
-
-// Asset loaders
-storage.addWebStore(
-  [storage.AssetType.Project],
-  () => {}
-);
-storage.addWebStore(
-  [storage.AssetType.ImageVector, storage.AssetType.ImageBitmap, storage.AssetType.Sound],
-  () => {}
-);
-
-// Run VM
-vm.start();
-
-// Load sb3
-document.getElementById("fileInput").addEventListener("change", async e => {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const buffer = await file.arrayBuffer();
-  await vm.loadProject(buffer);
-  vm.greenFlag();
-});
-
-// Controls
-document.getElementById("greenFlag").onclick = () => vm.greenFlag();
-document.getElementById("stopAll").onclick = () => vm.stopAll();
+function loadProject() {
+  const id = document.getElementById("projectId").value.trim();
+  if (!id || isNaN(id)) {
+    alert("Please enter a valid project number!");
+    return;
+  }
+  document.getElementById("player").src =
+    `https://scratch.mit.edu/projects/${id}/embed`;
+}
 </script>
 
 </body>
