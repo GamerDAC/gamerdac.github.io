@@ -87,14 +87,9 @@ p {
     font-size: 0.9rem;
     color: var(--pink);
     text-shadow: 0 0 10px var(--pink);
-    margin-bottom: 30px;
 }
 
-.games {
-    margin-top: 40px;
-}
-
-a {
+.games a {
     display: block;
     margin: 18px auto;
     padding: 14px 28px;
@@ -104,48 +99,23 @@ a {
     text-decoration: none;
     border: 2px solid var(--neon);
     border-radius: 6px;
-    box-shadow:
-        0 0 12px var(--neon),
-        inset 0 0 12px var(--neon);
+    box-shadow: 0 0 12px var(--neon), inset 0 0 12px var(--neon);
     background: rgba(0,0,0,0.6);
     transition: all 0.25s ease;
-    position: relative;
 }
 
-a::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-        120deg,
-        transparent 30%,
-        rgba(255,255,255,0.15),
-        transparent 70%
-    );
-    opacity: 0;
-    transition: opacity 0.3s;
-}
-
-a:hover::after {
-    opacity: 1;
-}
-
-a:hover {
-    color: #000;
+.games a:hover {
     background: var(--neon);
-    box-shadow:
-        0 0 25px var(--neon),
-        0 0 60px var(--neon);
+    color: #000;
     transform: scale(1.07);
 }
 
 .note {
     font-size: 0.6rem;
     color: #aaa;
-    margin-top: -10px;
 }
 
-/* Arcade grid floor */
+/* Grid floor */
 .grid {
     position: fixed;
     bottom: -40%;
@@ -161,31 +131,21 @@ a:hover {
     z-index: 0;
 }
 
-/* ===== Bottom Animations ===== */
+/* ===== Footer ===== */
 .arcade-footer {
-    position: relative;
     margin-top: 80px;
-    padding-bottom: 40px;
+    position: relative;
     z-index: 5;
 }
 
-/* 👾 Invaders */
+/* Invaders */
 .invaders {
     display: flex;
     justify-content: center;
     gap: 20px;
     font-size: 1.6rem;
     animation: drift 8s linear infinite;
-    filter: drop-shadow(0 0 10px var(--neon));
 }
-
-.invaders span {
-    animation: bob 1.8s ease-in-out infinite;
-}
-
-.invaders span:nth-child(2) { animation-delay: 0.3s; }
-.invaders span:nth-child(3) { animation-delay: 0.6s; }
-.invaders span:nth-child(4) { animation-delay: 0.9s; }
 
 @keyframes drift {
     0% { transform: translateX(-60px); }
@@ -193,36 +153,85 @@ a:hover {
     100% { transform: translateX(-60px); }
 }
 
-@keyframes bob {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
-}
-
-/* 🔊 Equalizer */
+/* Equalizer */
 .equalizer {
-    margin: 30px auto 0;
     display: flex;
     justify-content: center;
     gap: 8px;
     height: 40px;
+    margin-top: 25px;
 }
 
 .equalizer div {
     width: 8px;
     background: var(--neon);
-    box-shadow: 0 0 10px var(--neon);
     animation: equalize 1.2s infinite ease-in-out;
 }
 
-.equalizer div:nth-child(1) { animation-delay: 0s; }
-.equalizer div:nth-child(2) { animation-delay: 0.15s; }
-.equalizer div:nth-child(3) { animation-delay: 0.3s; }
-.equalizer div:nth-child(4) { animation-delay: 0.45s; }
-.equalizer div:nth-child(5) { animation-delay: 0.6s; }
-
 @keyframes equalize {
-    0%, 100% { height: 10px; }
+    0%,100% { height: 10px; }
     50% { height: 40px; }
+}
+
+/* Terminal */
+.terminal {
+    margin: 30px auto;
+    max-width: 420px;
+    padding: 14px;
+    border: 2px solid var(--neon);
+    background: rgba(0,0,0,0.75);
+    font-size: 0.6rem;
+    color: var(--neon);
+}
+
+/* High Scores */
+.scoreboard {
+    margin: 35px auto;
+    max-width: 360px;
+    border: 2px solid var(--pink);
+    padding: 15px;
+    background: rgba(0,0,0,0.8);
+    text-shadow: 0 0 8px var(--pink);
+}
+
+.scoreboard h2 {
+    font-size: 0.8rem;
+    margin-bottom: 10px;
+    color: var(--pink);
+}
+
+.scoreboard ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 0.6rem;
+}
+
+.scoreboard li {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+}
+
+/* Stats */
+.stats {
+    display: flex;
+    justify-content: center;
+    gap: 18px;
+    font-size: 0.6rem;
+    color: var(--pink);
+}
+
+/* Insert Coin */
+.coin {
+    margin-top: 25px;
+    font-size: 0.7rem;
+    color: var(--neon);
+    animation: blink 1.2s steps(2) infinite;
+}
+
+@keyframes blink {
+    50% { opacity: 0; }
 }
 </style>
 </head>
@@ -241,17 +250,53 @@ a:hover {
 </div>
 
 <div class="arcade-footer">
-    <div class="invaders">
-        <span>👾</span>
-        <span>👾</span>
-        <span>👾</span>
-        <span>👾</span>
-    </div>
+
+    <div class="invaders">👾 👾 👾 👾</div>
 
     <div class="equalizer">
         <div></div><div></div><div></div><div></div><div></div>
     </div>
+
+    <div class="terminal">
+        <span id="terminal-text">BOOTING GAMERDAC OS...</span>
+    </div>
+
+    <div class="scoreboard">
+        <h2>HI-SCORES</h2>
+        <ul>
+            <li><span>DAC</span><span>999999</span></li>
+            <li><span>AVA</span><span>742310</span></li>
+            <li><span>BOT</span><span>420420</span></li>
+            <li><span>MAE</span><span>133700</span></li>
+            <li><span>LEO</span><span>000010</span></li>
+        </ul>
+    </div>
+
+    <div class="stats">
+        <div>🎮 Games: 2</div>
+        <div>⚡ Status: ONLINE</div>
+        <div>🛠 HTML5</div>
+    </div>
+
+    <div class="coin">INSERT COIN ▷</div>
+
 </div>
+
+<script>
+const messages = [
+    "TIP: PERFECT TIMING = BIG POINTS",
+    "UPDATE: FULL VERSION IN DEV",
+    "WHO LET THE BALL ROLL?",
+    "GAMERDAC ENGINE ONLINE",
+    "PRESS START"
+];
+
+let i = 0;
+setInterval(() => {
+    document.getElementById("terminal-text").textContent = messages[i];
+    i = (i + 1) % messages.length;
+}, 2500);
+</script>
 
 </body>
 </html>
