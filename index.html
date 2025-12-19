@@ -110,34 +110,6 @@
         margin-top: -10px;
     }
 
-    /* ===== Custom Cursor ===== */
-    .cursor {
-        position: fixed;
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        background: #00ffff;
-        box-shadow:
-            0 0 10px #00ffff,
-            0 0 25px #00ffff;
-        pointer-events: none;
-        transform: translate(-50%, -50%);
-        z-index: 1000;
-        transition: transform 0.1s ease;
-    }
-
-    .cursor-ring {
-        position: fixed;
-        width: 35px;
-        height: 35px;
-        border-radius: 50%;
-        border: 2px solid #00ffff;
-        box-shadow: 0 0 15px #00ffff;
-        pointer-events: none;
-        transform: translate(-50%, -50%);
-        z-index: 999;
-        transition: all 0.15s ease-out;
-    }
 </style>
 </head>
 
@@ -157,31 +129,6 @@
     </a>
     <p class="note">(working on full version!)</p>
 </div>
-
-<!-- Cursor Elements -->
-<div class="cursor"></div>
-<div class="cursor-ring"></div>
-
-<script>
-    const cursor = document.querySelector('.cursor');
-    const ring = document.querySelector('.cursor-ring');
-
-    document.addEventListener('mousemove', e => {
-        cursor.style.left = e.clientX + 'px';
-        cursor.style.top = e.clientY + 'px';
-
-        ring.style.left = e.clientX + 'px';
-        ring.style.top = e.clientY + 'px';
-    });
-
-    document.addEventListener('mousedown', () => {
-        ring.style.transform = 'translate(-50%, -50%) scale(0.6)';
-    });
-
-    document.addEventListener('mouseup', () => {
-        ring.style.transform = 'translate(-50%, -50%) scale(1)';
-    });
-</script>
 
 </body>
 </html>
