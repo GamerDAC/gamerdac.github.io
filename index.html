@@ -1,5 +1,65 @@
-<h1>GamerDAC</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Scratch Project URL Loader</title>
+<style>
+  body {
+    margin: 0;
+    font-family: sans-serif;
+    background: #111;
+    color: white;
+  }
+  #bar {
+    padding: 10px;
+    background: #222;
+    display: flex;
+    gap: 8px;
+  }
+  input {
+    flex: 1;
+    padding: 6px;
+    font-size: 16px;
+  }
+  button {
+    font-size: 16px;
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+  iframe {
+    width: 100vw;
+    height: calc(100vh - 52px);
+    border: none;
+  }
+</style>
+</head>
+<body>
 
-<p>H5 GAMES:</p>
+<div id="bar">
+  <input id="url" placeholder="Paste Scratch project URL or ID (e.g. 123456789)">
+  <button onclick="loadProject()">Load</button>
+</div>
 
-<a href="http://gamerdac.github.io/tapandchangelite">TAC Lite</a>
+<iframe id="player"></iframe>
+
+<script>
+function extractID(input) {
+  const match = input.match(/(\d{6,})/);
+  return match ? match[1] : null;
+}
+
+function loadProject() {
+  const input = document.getElementById("url").value.trim();
+  const id = extractID(input);
+  if (!id) {
+    alert("Invalid Scratch project URL or ID");
+    return;
+  }
+
+  document.getElementById("player").src =
+    `https://turbowarp.org/${id}?fullscreen&autoplay&hqpen`;
+}
+</script>
+Psst! Play this: <a href="gamerdac.github.io/tapandchangelite">HERE</a>
+</body>
+</html>
