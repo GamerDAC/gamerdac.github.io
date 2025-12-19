@@ -1,6 +1,187 @@
-<h1>GamerDAC's Github Page</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GamerDAC</title>
 
-<p>HTML5 Games:</p>
+<style>
+    /* ===== Base ===== */
+    body {
+        background: radial-gradient(circle at top, #0f2027, #000);
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+        color: #fff;
+        text-align: center;
+        padding: 50px;
+        overflow-x: hidden;
+        cursor: none; /* hide default cursor */
+    }
 
-<a href="https://gamerdac.github.io/wholettheballroll/">WHO LET THE BALL ROLL?</a>
-<a href="https://gamerdac.github.io/tapandchangelite/">TAP & CHANGE (Lite)</a> <p>(working on full version!)</p>
+    /* ===== CRT Scanlines ===== */
+    body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        background: repeating-linear-gradient(
+            to bottom,
+            rgba(255,255,255,0.04),
+            rgba(255,255,255,0.04) 1px,
+            rgba(0,0,0,0) 3px,
+            rgba(0,0,0,0) 4px
+        );
+        z-index: 999;
+        animation: scanlines 8s linear infinite;
+    }
+
+    @keyframes scanlines {
+        from { background-position: 0 0; }
+        to { background-position: 0 100px; }
+    }
+
+    /* ===== CRT Flicker ===== */
+    body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background: rgba(255,255,255,0.02);
+        animation: flicker 0.15s infinite;
+        z-index: 998;
+    }
+
+    @keyframes flicker {
+        0% { opacity: 0.05; }
+        50% { opacity: 0.02; }
+        100% { opacity: 0.06; }
+    }
+
+    /* ===== Title ===== */
+    h1 {
+        font-size: 3rem;
+        color: #00ffff;
+        text-shadow:
+            0 0 5px #00ffff,
+            0 0 15px #00ffff,
+            0 0 30px #00ffff;
+        margin-bottom: 40px;
+    }
+
+    p {
+        font-size: 1.2rem;
+        color: #ff00ff;
+        text-shadow: 0 0 10px #ff00ff;
+    }
+
+    .games {
+        margin-top: 30px;
+    }
+
+    a {
+        display: block;
+        margin: 15px auto;
+        width: fit-content;
+        padding: 12px 25px;
+        font-size: 1.1rem;
+        color: #00ff99;
+        text-decoration: none;
+        border: 2px solid #00ff99;
+        border-radius: 8px;
+        box-shadow:
+            0 0 10px #00ff99,
+            inset 0 0 10px #00ff99;
+        transition: all 0.25s ease;
+    }
+
+    a:hover {
+        color: #000;
+        background: #00ff99;
+        box-shadow:
+            0 0 20px #00ff99,
+            0 0 40px #00ff99;
+        transform: scale(1.05);
+    }
+
+    .note {
+        font-size: 0.9rem;
+        color: #aaa;
+        margin-top: -10px;
+    }
+
+    /* ===== Custom Cursor ===== */
+    .cursor {
+        position: fixed;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #00ffff;
+        box-shadow:
+            0 0 10px #00ffff,
+            0 0 25px #00ffff;
+        pointer-events: none;
+        transform: translate(-50%, -50%);
+        z-index: 1000;
+        transition: transform 0.1s ease;
+    }
+
+    .cursor-ring {
+        position: fixed;
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        border: 2px solid #00ffff;
+        box-shadow: 0 0 15px #00ffff;
+        pointer-events: none;
+        transform: translate(-50%, -50%);
+        z-index: 999;
+        transition: all 0.15s ease-out;
+    }
+</style>
+</head>
+
+<body>
+
+<h1>GamerDAC's GitHub Page</h1>
+
+<p>HTML5 Games</p>
+
+<div class="games">
+    <a href="https://gamerdac.github.io/wholettheballroll/">
+        WHO LET THE BALL ROLL?
+    </a>
+
+    <a href="https://gamerdac.github.io/tapandchangelite/">
+        TAP & CHANGE (Lite)
+    </a>
+    <p class="note">(working on full version!)</p>
+</div>
+
+<!-- Cursor Elements -->
+<div class="cursor"></div>
+<div class="cursor-ring"></div>
+
+<script>
+    const cursor = document.querySelector('.cursor');
+    const ring = document.querySelector('.cursor-ring');
+
+    document.addEventListener('mousemove', e => {
+        cursor.style.left = e.clientX + 'px';
+        cursor.style.top = e.clientY + 'px';
+
+        ring.style.left = e.clientX + 'px';
+        ring.style.top = e.clientY + 'px';
+    });
+
+    document.addEventListener('mousedown', () => {
+        ring.style.transform = 'translate(-50%, -50%) scale(0.6)';
+    });
+
+    document.addEventListener('mouseup', () => {
+        ring.style.transform = 'translate(-50%, -50%) scale(1)';
+    });
+</script>
+
+</body>
+</html>
