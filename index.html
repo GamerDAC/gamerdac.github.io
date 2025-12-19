@@ -2,64 +2,81 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Scratch Project URL Loader</title>
+<title>Scratch Project Player</title>
 <style>
   body {
-    margin: 0;
-    font-family: sans-serif;
     background: #111;
     color: white;
+    font-family: sans-serif;
+    text-align: center;
   }
-  #bar {
-    padding: 10px;
-    background: #222;
-    display: flex;
-    gap: 8px;
-  }
-  input {
-    flex: 1;
-    padding: 6px;
-    font-size: 16px;
+  canvas {
+    background: white;
+    border: 2px solid #444;
   }
   button {
     font-size: 16px;
+    margin: 5px;
     padding: 6px 12px;
-    cursor: pointer;
-  }
-  iframe {
-    width: 100vw;
-    height: calc(100vh - 52px);
-    border: none;
   }
 </style>
 </head>
 <body>
 
-<div id="bar">
-  <input id="url" placeholder="Paste Scratch project URL or ID (e.g. 123456789)">
-  <button onclick="loadProject()">Load</button>
-</div>
+<h2>Scratch Project Player</h2>
 
-<iframe id="player"></iframe>
+<canvas id="stage" width="480" height="360"></canvas><br>
+
+<input type="file" id="fileInput" accept=".sb3">
+<br>
+<button id="greenFlag">▶ Green Flag</button>
+<button id="stopAll">■ Stop</button>
+
+<!-- Scratch libraries -->
+<script src="https://unpkg.com/scratch-vm@latest/dist/web/scratch-vm.js"></script>
+<script src="https://unpkg.com/scratch-render@latest/dist/web/scratch-render.js"></script>
+<script src="https://unpkg.com/scratch-audio@latest/dist/web/scratch-audio.js"></script>
+<script src="https://unpkg.com/scratch-storage@latest/dist/web/scratch-storage.js"></script>
 
 <script>
-function extractID(input) {
-  const match = input.match(/(\d{6,})/);
-  return match ? match[1] : null;
-}
+const canvas = document.getElementById("stage");
 
-function loadProject() {
-  const input = document.getElementById("url").value.trim();
-  const id = extractID(input);
-  if (!id) {
-    alert("Invalid Scratch project URL or ID");
-    return;
-  }
+const vm = new window.ScratchVM();
+const renderer = new window.ScratchRender(canvas);
+const audioEngine = new window.ScratchAudio.SoundEngine();
+const storage = new window.ScratchStorage();
 
-  document.getElementById("player").src =
-    `https://turbowarp.org/${id}/embed`;
-}
+vm.attachRenderer(renderer);
+vm.attachAudioEngine(audioEngine);
+vm.attachStorage(storage);
+
+// Asset loaders
+storage.addWebStore(
+  [storage.AssetType.Project],
+  () => {}
+);
+storage.addWebStore(
+  [storage.AssetType.ImageVector, storage.AssetType.ImageBitmap, storage.AssetType.Sound],
+  () => {}
+);
+
+// Run VM
+vm.start();
+
+// Load sb3
+document.getElementById("fileInput").addEventListener("change", async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const buffer = await file.arrayBuffer();
+  await vm.loadProject(buffer);
+  vm.greenFlag();
+});
+
+// Controls
+document.getElementById("greenFlag").onclick = () => vm.greenFlag();
+document.getElementById("stopAll").onclick = () => vm.stopAll();
 </script>
-Psst! Play this: <a href="gamerdac.github.io/tapandchangelite">HERE</a>
+
 </body>
 </html>
