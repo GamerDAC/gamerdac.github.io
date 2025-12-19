@@ -64,30 +64,6 @@
         text-shadow: 0 0 10px #ff00ff;
     }
 
-    /* ===== Scratch Profile ===== */
-    .profile {
-        margin: 40px auto;
-        max-width: 500px;
-        padding: 20px;
-        border: 2px solid #00ffff;
-        border-radius: 12px;
-        box-shadow: 0 0 20px #00ffff;
-    }
-
-    .profile img {
-        width: 120px;
-        border-radius: 50%;
-        box-shadow: 0 0 20px #00ff99;
-        margin-bottom: 15px;
-    }
-
-    .bio {
-        font-size: 1rem;
-        color: #00ff99;
-        text-shadow: 0 0 8px #00ff99;
-        white-space: pre-wrap;
-    }
-
     .games {
         margin-top: 30px;
     }
@@ -118,17 +94,50 @@
         color: #aaa;
         margin-top: -10px;
     }
+
+    .curator-count {
+        font-size: 1.2rem;
+        color: #ff00ff;
+        text-shadow: 0 0 10px #ff00ff;
+        margin-top: 20px;
+    }
+
+    .input-container {
+        margin-top: 30px;
+    }
+
+    input[type="text"] {
+        padding: 10px;
+        font-size: 1rem;
+        width: 200px;
+        border-radius: 5px;
+        border: 2px solid #00ff99;
+        background: transparent;
+        color: #fff;
+    }
+
+    button {
+        padding: 10px 20px;
+        font-size: 1rem;
+        color: #00ff99;
+        border: 2px solid #00ff99;
+        background: transparent;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-left: 10px;
+    }
+
+    button:hover {
+        background: #00ff99;
+        color: #000;
+        box-shadow: 0 0 20px #00ff99, 0 0 40px #00ff99;
+    }
 </style>
 </head>
 
 <body>
 
 <h1 id="username">GamerDAC</h1>
-
-<div class="profile">
-    <img id="pfp" alt="Scratch Profile Picture">
-    <p class="bio" id="bio">Loading Scratch bio...</p>
-</div>
 
 <p>HTML5 Games</p>
 
@@ -143,22 +152,40 @@
     <p class="note">(working on full version!)</p>
 </div>
 
-<script>
-fetch("https://api.scratch.mit.edu/users/GamerDAC")
-    .then(res => res.json())
-    .then(data => {
-        document.getElementById("username").textContent = data.username;
-        document.getElementById("bio").textContent =
-            data.profile.bio || "No bio set on Scratch.";
+<!-- Curator Count Section -->
+<p class="curator-count" id="curator-count">Enter a studio ID to get curator count</p>
 
-        document.getElementById("pfp").src =
-            data.profile.images["90x90"];
-    })
-    .catch(err => {
-        document.getElementById("bio").textContent =
-            "Failed to load Scratch profile.";
-        console.error(err);
-    });
+<!-- Input Section -->
+<div class="input-container">
+    <input type="text" id="studio-id" placeholder="Enter Scratch Studio ID">
+    <button onclick="fetchCuratorCount()">Get Curator Count</button>
+</div>
+
+<script>
+    function fetchCuratorCount() {
+        const studioID = document.getElementById("studio-id").value.trim();
+        
+        if (!studioID) {
+            alert("Please enter a valid studio ID!");
+            return;
+        }
+
+        fetch(`https://api.scratch.mit.edu/studios/${studioID}/`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error("Studio not found");
+                }
+                return response.json();
+            })
+            .then(data => {
+                const curatorCount = data.curator_count || 0;
+                document.getElementById("curator-count").textContent = `Number of curators: ${curatorCount}`;
+            })
+            .catch(error => {
+                document.getElementById("curator-count").textContent = "Failed to load curator count.";
+                console.error("Error fetching studio data:", error);
+            });
+    }
 </script>
 
 </body>
