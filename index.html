@@ -9,6 +9,11 @@
   --neon: #00fff7;
   --bg: #05060a;
   --panel: #0b0f1a;
+
+  /* CRT tuning */
+  --scanline-opacity: 0.08;
+  --flicker-strength: 0.03;
+  --glitch-strength: 2px;
 }
 
 * {
@@ -26,6 +31,7 @@ body {
   align-items: center;
 }
 
+/* ===== CONTAINER ===== */
 .container {
   background: var(--panel);
   border-radius: 16px;
@@ -34,8 +40,10 @@ body {
     0 0 20px var(--neon),
     inset 0 0 20px rgba(0,255,247,0.2);
   width: 520px;
+  position: relative;
 }
 
+/* ===== TITLE ===== */
 .title {
   text-align: center;
   font-size: 24px;
@@ -44,6 +52,7 @@ body {
   margin-bottom: 15px;
 }
 
+/* ===== CONTROLS ===== */
 .controls {
   display: flex;
   gap: 10px;
@@ -80,18 +89,82 @@ button:hover {
   box-shadow: 0 0 20px var(--neon);
 }
 
+/* ===== PLAYER CRT SHELL ===== */
 .player {
   width: 100%;
   height: 402px;
   border-radius: 12px;
   overflow: hidden;
+  position: relative;
   box-shadow: 0 0 25px rgba(0,255,247,0.5);
+  animation: flicker 3s infinite;
+  transform: perspective(800px) scale(1.01);
 }
 
+/* ===== CRT SCANLINES ===== */
+.player::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,var(--scanline-opacity)),
+      rgba(0,0,0,var(--scanline-opacity)) 1px,
+      transparent 2px,
+      transparent 4px
+    );
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ===== CRT NOISE ===== */
+.player::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* ===== IFRAME EFFECTS ===== */
 iframe {
   width: 100%;
   height: 100%;
   border: none;
+  filter:
+    contrast(1.1)
+    saturate(1.2)
+    drop-shadow(var(--glitch-strength) 0 red)
+    drop-shadow(calc(var(--glitch-strength) * -1) 0 cyan);
+  animation: chroma 2s infinite;
+}
+
+/* ===== GLITCH FLASH ===== */
+.glitch {
+  animation: glitchFlash 0.3s steps(2);
+}
+
+/* ===== ANIMATIONS ===== */
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: calc(1 - var(--flicker-strength)); }
+}
+
+@keyframes chroma {
+  0%, 100% { filter: none; }
+  50% {
+    filter:
+      drop-shadow(1px 0 red)
+      drop-shadow(-1px 0 cyan);
+  }
+}
+
+@keyframes glitchFlash {
+  0% { transform: translateX(-2px); }
+  50% { transform: translateX(2px); }
+  100% { transform: translateX(0); }
 }
 </style>
 </head>
@@ -105,7 +178,7 @@ iframe {
     <button onclick="loadProject()">LOAD</button>
   </div>
 
-  <div class="player">
+  <div class="player" id="crt">
     <iframe id="player"
       src="https://scratch.mit.edu/projects/1000/embed"
       allowfullscreen>
@@ -120,8 +193,14 @@ function loadProject() {
     alert("Please enter a valid project number!");
     return;
   }
-  document.getElementById("player").src =
-    `https://scratch.mit.edu/projects/${id}/embed`;
+
+  const iframe = document.getElementById("player");
+  const crt = document.getElementById("crt");
+
+  crt.classList.add("glitch");
+  iframe.src = `https://scratch.mit.edu/projects/${id}/embed`;
+
+  setTimeout(() => crt.classList.remove("glitch"), 300);
 }
 </script>
 
