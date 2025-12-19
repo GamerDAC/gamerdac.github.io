@@ -245,8 +245,9 @@ p {
 
 <div class="games">
     <a href="https://gamerdac.github.io/wholettheballroll/">WHO LET THE BALL ROLL?</a>
+    <p class="note">(mobile game)</p>
     <a href="https://gamerdac.github.io/tapandchangelite/">TAP & CHANGE (LITE)</a>
-    <p class="note">(working on full version!)</p>
+    <p class="note">(mobile game)</p>
 </div>
 
 <div class="arcade-footer">
@@ -258,7 +259,7 @@ p {
     </div>
 
     <div class="terminal">
-        <span id="terminal-text">BOOTING GAMERDAC OS...</span>
+        <span id="terminal-text">BOOTING ARCADE OS...</span>
     </div>
 
     <div class="scoreboard">
@@ -286,7 +287,7 @@ p {
 const messages = [
     "TIP: PERFECT TIMING = BIG POINTS",
     "UPDATE: FULL VERSION IN DEV",
-    "TIP: THE COOLER YOU ARE, THE MORE POINTS YOU GET",
+    "TIP: NO TIP :D",
     "GAMERDAC ENGINE ONLINE",
     "PRESS START!"
 ];
@@ -295,7 +296,7 @@ let i = 0;
 setInterval(() => {
     document.getElementById("terminal-text").textContent = messages[i];
     i = (i + 1) % messages.length;
-}, 2500);
+}, 10000);
 </script>
 
 </body>
