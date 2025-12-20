@@ -14,15 +14,12 @@
     --bg-dark: #000;
 }
 
-* {
-    box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
     margin: 0;
     min-height: 100vh;
-    background:
-        radial-gradient(circle at top, #0b3d1e, #000 70%);
+    background: radial-gradient(circle at top, #0b3d1e, #000 70%);
     font-family: 'Press Start 2P', monospace;
     color: #fff;
     text-align: center;
@@ -33,14 +30,12 @@ body {
 .stars {
     position: fixed;
     inset: 0;
-    background:
-        radial-gradient(#0f0 1px, transparent 1px);
+    background: radial-gradient(#0f0 1px, transparent 1px);
     background-size: 120px 120px;
     opacity: 0.08;
     animation: driftStars 60s linear infinite;
     z-index: 0;
 }
-
 @keyframes driftStars {
     from { background-position: 0 0; }
     to { background-position: 1200px 800px; }
@@ -60,7 +55,6 @@ body::before {
     );
     z-index: 10;
 }
-
 body::after {
     content: "";
     position: fixed;
@@ -70,7 +64,6 @@ body::after {
     animation: flicker 0.12s infinite;
     z-index: 9;
 }
-
 @keyframes flicker {
     50% { opacity: 0.03; }
 }
@@ -95,6 +88,7 @@ header {
     position: relative;
     z-index: 5;
     padding: 60px 20px 30px;
+    transition: transform 0.15s ease-out;
 }
 
 h1 {
@@ -103,7 +97,6 @@ h1 {
     text-shadow: 0 0 20px var(--neon);
     animation: pulse 2.5s infinite;
 }
-
 @keyframes pulse {
     50% { text-shadow: 0 0 45px var(--neon-soft); }
 }
@@ -124,9 +117,11 @@ h1 {
     padding: 30px 20px;
     max-width: 900px;
     margin: auto;
+    transition: transform 0.15s ease-out;
 }
 
 .game-card {
+    position: relative;
     border: 2px solid var(--neon);
     background: rgba(0,0,0,0.7);
     padding: 20px;
@@ -140,6 +135,26 @@ h1 {
     box-shadow: 0 0 40px var(--neon);
 }
 
+.game-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        120deg,
+        transparent 40%,
+        rgba(0,255,102,0.15),
+        transparent 60%
+    );
+    opacity: 0;
+    transform: translateX(-100%);
+    transition: transform 0.5s ease, opacity 0.3s;
+}
+
+.game-card:hover::after {
+    opacity: 1;
+    transform: translateX(100%);
+}
+
 .game-card a {
     text-decoration: none;
     color: var(--neon);
@@ -150,24 +165,31 @@ h1 {
     font-size: 0.8rem;
     margin-bottom: 10px;
 }
-
 .game-note {
     font-size: 0.6rem;
     opacity: 0.7;
 }
+
+/* ===== ATTRACT MODE ===== */
+@keyframes attract {
+    0%,100% { box-shadow: 0 0 20px var(--neon-soft); }
+    50% { box-shadow: 0 0 60px var(--neon); }
+}
+.game-card:nth-child(odd) { animation: attract 4s infinite; }
+.game-card:nth-child(even) { animation: attract 4s infinite 2s; }
 
 /* ===== FOOTER ===== */
 .arcade-footer {
     position: relative;
     z-index: 5;
     padding: 40px 20px 80px;
+    transition: transform 0.15s ease-out;
 }
 
 .invaders {
     font-size: 1.6rem;
     animation: drift 6s ease-in-out infinite;
 }
-
 @keyframes drift {
     50% { transform: translateX(40px); }
 }
@@ -184,7 +206,6 @@ h1 {
 
 .stats {
     display: flex;
-    flex-wrap: wrap;
     justify-content: center;
     gap: 16px;
     font-size: 0.6rem;
@@ -198,16 +219,40 @@ h1 {
     color: var(--neon);
     animation: blink 1.2s steps(2) infinite;
 }
+@keyframes blink { 50% { opacity: 0; } }
 
-@keyframes blink {
-    50% { opacity: 0; }
+/* ===== KONAMI MODE ===== */
+body.konami {
+    animation: konamiFlash 0.4s steps(2) 6;
+}
+@keyframes konamiFlash {
+    0% { filter: hue-rotate(0deg) brightness(1); }
+    100% { filter: hue-rotate(90deg) brightness(1.3); }
+}
+
+.konami-banner {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.8);
+    background: black;
+    border: 3px solid var(--neon);
+    padding: 20px;
+    color: var(--neon);
+    font-size: 0.7rem;
+    box-shadow: 0 0 40px var(--neon);
+    opacity: 0;
+    z-index: 100;
+    pointer-events: none;
+}
+.konami-banner.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
 }
 
 /* ===== ACCESSIBILITY ===== */
 @media (prefers-reduced-motion: reduce) {
-    * {
-        animation: none !important;
-    }
+    * { animation: none !important; }
 }
 </style>
 </head>
@@ -229,7 +274,6 @@ h1 {
             <div class="game-note">📱 Mobile Game</div>
         </a>
     </div>
-
     <div class="game-card">
         <a href="https://gamerdac.github.io/tapandchangelite/">
             <div class="game-title">TAP & CHANGE (LITE)</div>
@@ -239,36 +283,96 @@ h1 {
 </section>
 
 <footer class="arcade-footer">
-
     <div class="invaders">👾 👾 👾 👾</div>
 
     <div class="terminal">
-        <span id="terminal-text">BOOTING ARCADE OS...</span>
+        <span id="terminal-text"></span>
     </div>
 
     <div class="stats">
-        <div>🎮 GAMES: 2</div>
+        <div>🎮 GAMES: <span id="game-count"></span></div>
         <div>⚡ STATUS: ONLINE</div>
         <div>🛠 HTML5</div>
     </div>
 
     <div class="coin">INSERT COIN...</div>
-
 </footer>
 
+<div class="konami-banner" id="konami-banner">
+★ CHEAT MODE ENABLED ★<br><br>
+UNLIMITED HYPE
+</div>
+
 <script>
+/* ===== PARALLAX ===== */
+document.addEventListener("mousemove", e => {
+    const x = (e.clientX / innerWidth - 0.5) * 10;
+    const y = (e.clientY / innerHeight - 0.5) * 10;
+    document.querySelector("header").style.transform = `translate(${x}px,${y}px)`;
+    document.querySelector(".games").style.transform = `translate(${x*1.5}px,${y*1.5}px)`;
+    document.querySelector(".arcade-footer").style.transform = `translate(${x*2}px,${y*2}px)`;
+});
+
+/* ===== TERMINAL TYPE ===== */
 const messages = [
-    "TIP: PERFECT TIMING = BIG POINTS",
-    "UPDATE: FULL VERSION IN DEV",
-    "GAMERDAC ENGINE ONLINE",
+    "BOOTING ARCADE OS...",
+    "LOADING NEON DRIVERS...",
+    "SYNCING GAME CORES...",
     "PRESS START!"
 ];
+let m = 0, c = 0;
+const terminal = document.getElementById("terminal-text");
 
-let i = 0;
-setInterval(() => {
-    document.getElementById("terminal-text").textContent = messages[i];
-    i = (i + 1) % messages.length;
-}, 9000);
+function type() {
+    if (c < messages[m].length) {
+        terminal.textContent += messages[m][c++];
+        setTimeout(type, 40);
+    } else {
+        setTimeout(() => {
+            c = 0;
+            m = (m + 1) % messages.length;
+            terminal.textContent = "";
+            type();
+        }, 1800);
+    }
+}
+type();
+
+/* ===== GAME COUNT ===== */
+document.getElementById("game-count").textContent =
+    document.querySelectorAll(".game-card").length;
+
+/* ===== KONAMI CODE ===== */
+const konami = [
+    "ArrowUp","ArrowUp","ArrowDown","ArrowDown",
+    "ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"
+];
+let index = 0;
+
+document.addEventListener("keydown", e => {
+    if (e.key.toLowerCase() === konami[index].toLowerCase()) {
+        index++;
+        if (index === konami.length) {
+            activateKonami();
+            index = 0;
+        }
+    } else index = 0;
+});
+
+function activateKonami() {
+    document.body.classList.add("konami");
+    document.getElementById("konami-banner").classList.add("show");
+    terminal.textContent = "CHEAT MODE ACTIVATED";
+
+    document.querySelectorAll(".game-card").forEach(c =>
+        c.style.boxShadow = "0 0 60px var(--neon)"
+    );
+
+    setTimeout(() => {
+        document.body.classList.remove("konami");
+        document.getElementById("konami-banner").classList.remove("show");
+    }, 4000);
+}
 </script>
 
 </body>
