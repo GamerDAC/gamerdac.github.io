@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>GamerDAC</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GamerDAC Arcade</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 
@@ -10,21 +11,42 @@
 :root {
     --neon: #00ff66;
     --neon-soft: rgba(0,255,102,0.6);
-    --pink: #00ff66;
+    --bg-dark: #000;
+}
+
+* {
+    box-sizing: border-box;
 }
 
 body {
+    margin: 0;
+    min-height: 100vh;
     background:
-        radial-gradient(circle at top, #0b3d1e, #000),
-        linear-gradient(to top, rgba(0,255,102,0.08), transparent 40%);
+        radial-gradient(circle at top, #0b3d1e, #000 70%);
     font-family: 'Press Start 2P', monospace;
     color: #fff;
     text-align: center;
-    padding: 50px 20px;
     overflow-x: hidden;
 }
 
-/* Scanlines */
+/* ===== STARFIELD ===== */
+.stars {
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(#0f0 1px, transparent 1px);
+    background-size: 120px 120px;
+    opacity: 0.08;
+    animation: driftStars 60s linear infinite;
+    z-index: 0;
+}
+
+@keyframes driftStars {
+    from { background-position: 0 0; }
+    to { background-position: 1200px 800px; }
+}
+
+/* ===== CRT EFFECTS ===== */
 body::before {
     content: "";
     position: fixed;
@@ -32,199 +54,146 @@ body::before {
     pointer-events: none;
     background: repeating-linear-gradient(
         to bottom,
-        rgba(255,255,255,0.04),
-        rgba(255,255,255,0.04) 1px,
-        rgba(0,0,0,0) 3px,
-        rgba(0,0,0,0) 4px
+        rgba(255,255,255,0.03),
+        rgba(255,255,255,0.03) 1px,
+        transparent 3px
     );
-    z-index: 999;
-    animation: scanlines 8s linear infinite;
+    z-index: 10;
 }
 
-@keyframes scanlines {
-    from { background-position: 0 0; }
-    to { background-position: 0 100px; }
-}
-
-/* CRT flicker */
 body::after {
     content: "";
     position: fixed;
     inset: 0;
     pointer-events: none;
-    background: rgba(255,255,255,0.02);
+    background: rgba(255,255,255,0.015);
     animation: flicker 0.12s infinite;
-    z-index: 998;
+    z-index: 9;
 }
 
 @keyframes flicker {
-    0% { opacity: 0.04; }
-    50% { opacity: 0.015; }
-    100% { opacity: 0.05; }
+    50% { opacity: 0.03; }
 }
 
-h1 {
-    font-size: 2.6rem;
-    color: var(--neon);
-    text-shadow:
-        0 0 5px var(--neon),
-        0 0 20px var(--neon),
-        0 0 40px var(--neon-soft);
-    margin-bottom: 25px;
-    animation: glowPulse 2.5s ease-in-out infinite;
-}
-
-@keyframes glowPulse {
-    0%, 100% {
-        text-shadow: 0 0 10px var(--neon), 0 0 30px var(--neon-soft);
-    }
-    50% {
-        text-shadow: 0 0 25px var(--neon), 0 0 60px var(--neon-soft);
-    }
-}
-
-p {
-    font-size: 0.9rem;
-    color: var(--pink);
-    text-shadow: 0 0 10px var(--pink);
-}
-
-.games a {
-    display: block;
-    margin: 18px auto;
-    padding: 14px 28px;
-    width: fit-content;
-    font-size: 0.8rem;
-    color: var(--neon);
-    text-decoration: none;
-    border: 2px solid var(--neon);
-    border-radius: 6px;
-    box-shadow: 0 0 12px var(--neon), inset 0 0 12px var(--neon);
-    background: rgba(0,0,0,0.6);
-    transition: all 0.25s ease;
-}
-
-.games a:hover {
-    background: var(--neon);
-    color: #000;
-    transform: scale(1.07);
-}
-
-.note {
-    font-size: 0.6rem;
-    color: #aaa;
-}
-
-/* Grid floor */
+/* ===== GRID FLOOR ===== */
 .grid {
     position: fixed;
-    bottom: -40%;
-    left: 0;
+    bottom: -45%;
     width: 100%;
-    height: 80%;
+    height: 90%;
     background:
         linear-gradient(var(--neon) 1px, transparent 1px),
         linear-gradient(90deg, var(--neon) 1px, transparent 1px);
     background-size: 60px 60px;
     transform: perspective(500px) rotateX(65deg);
     opacity: 0.15;
-    z-index: 0;
+    z-index: 1;
 }
 
-/* ===== Footer ===== */
-.arcade-footer {
-    margin-top: 80px;
+/* ===== HEADER ===== */
+header {
     position: relative;
     z-index: 5;
+    padding: 60px 20px 30px;
 }
 
-/* Invaders */
-.invaders {
-    display: flex;
-    justify-content: center;
+h1 {
+    font-size: clamp(1.8rem, 6vw, 2.8rem);
+    color: var(--neon);
+    text-shadow: 0 0 20px var(--neon);
+    animation: pulse 2.5s infinite;
+}
+
+@keyframes pulse {
+    50% { text-shadow: 0 0 45px var(--neon-soft); }
+}
+
+.subtitle {
+    font-size: 0.75rem;
+    color: var(--neon);
+    opacity: 0.8;
+}
+
+/* ===== GAMES ===== */
+.games {
+    position: relative;
+    z-index: 5;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 20px;
+    padding: 30px 20px;
+    max-width: 900px;
+    margin: auto;
+}
+
+.game-card {
+    border: 2px solid var(--neon);
+    background: rgba(0,0,0,0.7);
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 20px var(--neon-soft);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.game-card:hover {
+    transform: translateY(-6px) scale(1.03);
+    box-shadow: 0 0 40px var(--neon);
+}
+
+.game-card a {
+    text-decoration: none;
+    color: var(--neon);
+    display: block;
+}
+
+.game-title {
+    font-size: 0.8rem;
+    margin-bottom: 10px;
+}
+
+.game-note {
+    font-size: 0.6rem;
+    opacity: 0.7;
+}
+
+/* ===== FOOTER ===== */
+.arcade-footer {
+    position: relative;
+    z-index: 5;
+    padding: 40px 20px 80px;
+}
+
+.invaders {
     font-size: 1.6rem;
-    animation: drift 8s linear infinite;
+    animation: drift 6s ease-in-out infinite;
 }
 
 @keyframes drift {
-    0% { transform: translateX(-60px); }
-    50% { transform: translateX(60px); }
-    100% { transform: translateX(-60px); }
+    50% { transform: translateX(40px); }
 }
 
-/* Equalizer */
-.equalizer {
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    height: 40px;
-    margin-top: 25px;
-}
-
-.equalizer div {
-    width: 8px;
-    background: var(--neon);
-    animation: equalize 1.2s infinite ease-in-out;
-}
-
-@keyframes equalize {
-    0%,100% { height: 10px; }
-    50% { height: 40px; }
-}
-
-/* Terminal */
 .terminal {
     margin: 30px auto;
     max-width: 420px;
-    padding: 14px;
     border: 2px solid var(--neon);
-    background: rgba(0,0,0,0.75);
+    padding: 14px;
+    background: rgba(0,0,0,0.8);
     font-size: 0.6rem;
     color: var(--neon);
 }
 
-/* High Scores */
-.scoreboard {
-    margin: 35px auto;
-    max-width: 200px;
-    border: 2px solid var(--pink);
-    padding: 15px;
-    background: rgba(0,0,0,0.8);
-    text-shadow: 0 0 8px var(--pink);
-}
-
-.scoreboard h2 {
-    font-size: 0.8rem;
-    margin-bottom: 10px;
-    color: var(--pink);
-}
-
-.scoreboard ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    font-size: 0.6rem;
-}
-
-.scoreboard li {
-    display: flex;
-    justify-content: space-between;
-    padding: 4px 0;
-}
-
-/* Stats */
 .stats {
     display: flex;
+    flex-wrap: wrap;
     justify-content: center;
-    gap: 18px;
+    gap: 16px;
     font-size: 0.6rem;
-    color: var(--pink);
+    color: var(--neon);
+    opacity: 0.8;
 }
 
-/* Insert Coin */
 .coin {
-    margin-top: 25px;
+    margin-top: 30px;
     font-size: 0.7rem;
     color: var(--neon);
     animation: blink 1.2s steps(2) infinite;
@@ -233,61 +202,64 @@ p {
 @keyframes blink {
     50% { opacity: 0; }
 }
+
+/* ===== ACCESSIBILITY ===== */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation: none !important;
+    }
+}
 </style>
 </head>
 
 <body>
 
+<div class="stars"></div>
 <div class="grid"></div>
 
-<h1>GamerDAC</h1>
-<p>HTML5 Games</p>
+<header>
+    <h1>GamerDAC</h1>
+    <div class="subtitle">HTML5 ARCADE</div>
+</header>
 
-<div class="games">
-    <a href="https://gamerdac.github.io/wholettheballroll/">WHO LET THE BALL ROLL?</a>
-    <p class="note">(mobile game)</p>
-    <a href="https://gamerdac.github.io/tapandchangelite/">TAP & CHANGE (LITE)</a>
-    <p class="note">(mobile game)</p>
-</div>
+<section class="games">
+    <div class="game-card">
+        <a href="https://gamerdac.github.io/wholettheballroll/">
+            <div class="game-title">WHO LET THE BALL ROLL?</div>
+            <div class="game-note">📱 Mobile Game</div>
+        </a>
+    </div>
 
-<div class="arcade-footer">
+    <div class="game-card">
+        <a href="https://gamerdac.github.io/tapandchangelite/">
+            <div class="game-title">TAP & CHANGE (LITE)</div>
+            <div class="game-note">📱 Mobile Game</div>
+        </a>
+    </div>
+</section>
+
+<footer class="arcade-footer">
 
     <div class="invaders">👾 👾 👾 👾</div>
-
-    <div class="equalizer">
-        <div></div><div></div><div></div><div></div><div></div>
-    </div>
 
     <div class="terminal">
         <span id="terminal-text">BOOTING ARCADE OS...</span>
     </div>
 
-    <div class="scoreboard">
-        <h2>HI-SCORES</h2>
-        <ul>
-            <li><span>DAC</span><span>999999</span></li>
-            <li><span>AVA</span><span>742310</span></li>
-            <li><span>BOT</span><span>420420</span></li>
-            <li><span>MAE</span><span>133700</span></li>
-            <li><span>LEO</span><span>000010</span></li>
-        </ul>
-    </div>
-
     <div class="stats">
-        <div>🎮 Games: 2</div>
-        <div>⚡ Status: ONLINE</div>
+        <div>🎮 GAMES: 2</div>
+        <div>⚡ STATUS: ONLINE</div>
         <div>🛠 HTML5</div>
     </div>
 
     <div class="coin">INSERT COIN...</div>
 
-</div>
+</footer>
 
 <script>
 const messages = [
     "TIP: PERFECT TIMING = BIG POINTS",
     "UPDATE: FULL VERSION IN DEV",
-    "TIP: NO TIP :D",
     "GAMERDAC ENGINE ONLINE",
     "PRESS START!"
 ];
@@ -296,7 +268,7 @@ let i = 0;
 setInterval(() => {
     document.getElementById("terminal-text").textContent = messages[i];
     i = (i + 1) % messages.length;
-}, 10000);
+}, 9000);
 </script>
 
 </body>
