@@ -2,323 +2,390 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>GAMERDAC ELITE BBS</title>
+<title>GAMERDAC'S PORTFOLIO</title>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 
 <style>
+*{box-sizing:border-box}
 body{
-    margin:0;
-    background:black;
-    color:#00ff66;
-    font-family:'VT323', monospace;
-    font-size:20px;
-    overflow:hidden;
-    animation:flicker .15s infinite;
+margin:0;
+height:100vh;
+background:#0a0a0a;
+display:flex;
+justify-content:center;
+align-items:center;
+font-family:'VT323',monospace;
+overflow:hidden;
 }
 
-body::after{
-    content:"";
-    position:fixed;
-    top:0;left:0;width:100%;height:100%;
-    background:repeating-linear-gradient(
-        to bottom,
-        rgba(0,255,100,.05),
-        rgba(0,255,100,.05) 1px,
-        transparent 1px,
-        transparent 3px
-    );
-    pointer-events:none;
+/* ===== PC BODY ===== */
+.pc-wrapper{display:flex;flex-direction:column;align-items:center;gap:20px}
+.pc-box{
+width:900px;
+background:#d8d2c2;
+border:8px solid #bfb8a6;
+border-radius:14px;
+box-shadow:inset -4px -4px 10px #a39d8c,
+           inset 4px 4px 10px #f3efe5,
+           0 40px 80px rgba(0,0,0,.8);
+padding:30px;
+position:relative;
+}
+.vents{
+position:absolute;top:10px;left:30px;
+width:200px;height:10px;
+background:repeating-linear-gradient(to right,#aaa 0 3px,transparent 3px 6px);
+}
+.floppy{
+position:absolute;bottom:20px;left:30px;
+width:160px;height:20px;
+background:#b5ae9b;border:2px solid #8e8876;
 }
 
-.vhs{ animation:vhsShift 0.3s infinite; }
-
-@keyframes vhsShift{
-    0%{filter:hue-rotate(0deg);}
-    50%{filter:hue-rotate(5deg);}
-    100%{filter:hue-rotate(0deg);}
+/* ===== POWER ===== */
+.power{
+position:absolute;bottom:15px;right:40px;
+width:44px;height:22px;
+background:#333;border-radius:5px;
+cursor:pointer;box-shadow:inset 0 0 6px #000;
+}
+.power::after{
+content:"";position:absolute;
+width:18px;height:18px;
+top:2px;left:2px;
+background:#999;border-radius:3px;
+transition:.25s cubic-bezier(.4,2,.6,1);
+}
+.power.on::after{
+left:24px;background:#00ff66;
+box-shadow:0 0 12px #00ff66;
 }
 
-@keyframes flicker{
-    0%{opacity:.98;}
-    50%{opacity:1;}
-    100%{opacity:.97;}
+/* ===== SCREEN ===== */
+.screen{
+background:#000;
+color:#33ff33;
+height:500px;
+overflow:hidden;
+padding:20px;
+border:6px solid #222;
+border-radius:25px;
+position:relative;
+transition:.3s ease;
 }
-
-@keyframes pulseGlow{
-    0%{box-shadow:0 0 5px #00ff66;}
-    50%{box-shadow:0 0 20px #00ff66;}
-    100%{box-shadow:0 0 5px #00ff66;}
+.screen.on{
+box-shadow:
+inset 0 0 100px rgba(0,255,0,.25),
+0 0 80px rgba(0,255,0,.2);
 }
-
-canvas{position:fixed;top:0;left:0;z-index:-1;}
+.screen::before{
+content:"";
+position:absolute;inset:0;
+background:repeating-linear-gradient(
+to bottom,
+rgba(0,255,0,.05) 0 1px,
+transparent 1px 3px);
+pointer-events:none;
+opacity:0;
+transition:.3s;
+}
+.screen.on::before{opacity:1}
+.screen::after{
+content:"";
+position:absolute;
+top:-100%;width:100%;height:200%;
+background:linear-gradient(
+to bottom,
+transparent 0%,
+rgba(0,255,0,.12) 50%,
+transparent 100%);
+animation:sweep 8s linear infinite;
+pointer-events:none;
+opacity:0;
+}
+.screen.on::after{opacity:1}
+@keyframes sweep{to{top:100%}}
 
 .terminal{
-    padding:20px;
-    text-shadow:0 0 5px #00ff66,0 0 15px #00ff66;
-    max-height:100vh;
-    overflow-y:auto;
+text-shadow:0 0 10px #33ff33;
+height:100%;
+overflow-y:auto;
+scroll-behavior:smooth;
+}
+.flicker{animation:flicker 2s infinite}
+@keyframes flicker{
+0%,18%,22%,25%,53%,57%,100%{opacity:1}
+20%,24%,55%{opacity:.4}
 }
 
-input{
-    background:transparent;
-    border:none;
-    color:#00ff66;
-    font-family:'VT323';
-    font-size:20px;
-    outline:none;
-    width:100%;
+.cursor{
+display:inline-block;
+width:12px;height:20px;
+background:#33ff33;
+animation:blink 1s steps(1) infinite;
+}
+@keyframes blink{50%{opacity:0}}
+
+.static{
+position:absolute;inset:0;
+background:url("https://media.giphy.com/media/oEI9uBYSzLpBK/giphy.gif");
+background-size:cover;
+opacity:0;
+pointer-events:none;
+}
+.static.on{opacity:.25;animation:staticFlash .3s ease}
+@keyframes staticFlash{0%{opacity:.8}100%{opacity:.25}}
+
+/* CRT shutdown */
+.crt-flash{
+position:absolute;inset:0;
+background:white;
+opacity:0;
+pointer-events:none;
+}
+.crt-flash.active{animation:crtShutdown .6s forwards}
+@keyframes crtShutdown{
+0%{opacity:1;transform:scaleY(1);}
+40%{opacity:1;transform:scaleY(0.02);}
+60%{opacity:1;transform:scaleX(0.02) scaleY(0.02);}
+100%{opacity:0;transform:scale(0);}
 }
 
-.cpu{
-    position:fixed;
-    top:10px;
-    right:20px;
+.repo-selected{
+background:#33ff33;
+color:#000;
 }
 
-.feed{
-    position:fixed;
-    bottom:10px;
-    right:20px;
-    width:300px;
-    font-size:16px;
-    opacity:.8;
+.keyboard{
+width:920px;height:120px;
+background:#cfc8b6;
+border:6px solid #b5ae9b;
+border-radius:8px;
+box-shadow:inset -3px -3px 6px #a29c8c,
+           inset 3px 3px 6px #eee8db;
+position:relative;
 }
-
-.selected{
-    background:#00ff66;
-    color:black;
-    padding:6px;
-    animation:pulseGlow 1s infinite;
+.keys{
+position:absolute;inset:20px;
+background:repeating-linear-gradient(
+to right,#bdb6a5 0 40px,transparent 40px 50px);
+opacity:.6;
 }
 </style>
 </head>
 
-<body class="vhs">
+<body>
+<div class="pc-wrapper">
+<div class="pc-box">
+<div class="vents"></div>
 
-<canvas id="matrix"></canvas>
-<div class="cpu" id="cpu">CPU: 0%</div>
-<div class="feed" id="feed"></div>
+<div class="screen" id="screen">
+<div class="static" id="static"></div>
+<div class="crt-flash" id="crtFlash"></div>
 <div class="terminal" id="terminal"></div>
+</div>
+
+<div class="floppy"></div>
+ 
+<div class="power" id="power"></div>
+</div>
+
+<div class="keyboard"><div class="keys"></div></div>
+</div>
 
 <script>
+const screen=document.getElementById("screen");
+const power=document.getElementById("power");
 const term=document.getElementById("terminal");
-const cpuDisplay=document.getElementById("cpu");
-const feed=document.getElementById("feed");
+const staticLayer=document.getElementById("static");
+const crtFlash=document.getElementById("crtFlash");
 
-/* MATRIX */
-const canvas=document.getElementById("matrix");
-const ctx=canvas.getContext("2d");
-
-function resizeCanvas(){
-    canvas.height=window.innerHeight;
-    canvas.width=window.innerWidth;
-}
-resizeCanvas();
-window.addEventListener("resize",resizeCanvas);
-
-const letters="01";
-const fontSize=14;
-let columns=Math.floor(canvas.width/fontSize);
-let drops=Array(columns).fill(1);
-
-function draw(){
-    ctx.fillStyle="rgba(0,0,0,0.05)";
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-    ctx.fillStyle="#00ff66";
-    ctx.font=fontSize+"px monospace";
-    drops.forEach((y,i)=>{
-        const text=letters[Math.floor(Math.random()*letters.length)];
-        ctx.fillText(text,i*fontSize,y*fontSize);
-        if(y*fontSize>canvas.height && Math.random()>0.975) drops[i]=0;
-        drops[i]++;
-    });
-}
-setInterval(draw,33);
-
-/* CPU */
-setInterval(()=>{
-    cpuDisplay.textContent="CPU: "+Math.floor(Math.random()*100)+"%";
-},500);
-
-/* FEED */
-const messages=[
-"[SYS] NODE 03 CONNECTED",
-"[WARN] TRACE ROUTE ACTIVE",
-"[SYS] ENCRYPTION ENABLED",
-"[MSG] meet @ 23:00 node 7",
-"[ALERT] gov node ping detected"
-];
-
-setInterval(()=>{
-    const msg=messages[Math.floor(Math.random()*messages.length)];
-    feed.innerHTML=msg+"<br>"+feed.innerHTML.slice(0,200);
-},3000);
-
-/* TYPE EFFECT */
-function typeLine(text,speed=15){
-    return new Promise(res=>{
-        const line=document.createElement("div");
-        term.appendChild(line);
-        let i=0;
-        function typing(){
-            if(i<text.length){
-                line.innerHTML+=text[i++];
-                setTimeout(typing,speed);
-            }else{
-                term.scrollTop=term.scrollHeight;
-                res();
-            }
-        }
-        typing();
-    });
-}
-
-/* BOOT */
-async function boot(){
-    await typeLine("PRESS ANY KEY TO INITIALIZE MODEM");
-    document.addEventListener("keydown",async ()=>{
-        await typeLine("BOOTING...");
-        await typeLine("640KB RAM OK");
-        await typeLine("CONNECT 2400 BAUD");
-        await typeLine("WELCOME ELITE USER");
-        prompt();
-    },{once:true});
-}
-
-/* PROMPT */
+let powered=false;
 let selectionMode=false;
 
-function prompt(){
-    if(selectionMode) return;
-
-    const input=document.createElement("input");
-    input.placeholder="bbs>";
-    term.appendChild(input);
-    input.focus();
-
-    input.addEventListener("keydown",async e=>{
-        if(e.key==="Enter"){
-            const cmd=input.value.trim().toLowerCase();
-            input.remove();
-            await handle(cmd);
-            prompt();
-        }
-    });
+/* ===== AUDIO ===== */
+function beep(freq=800,dur=120,type="square"){
+const ctx=new (window.AudioContext||window.webkitAudioContext)();
+const osc=ctx.createOscillator();
+osc.type=type;
+osc.frequency.value=freq;
+osc.connect(ctx.destination);
+osc.start();
+setTimeout(()=>{osc.stop();ctx.close();},dur);
 }
 
-/* COMMAND HANDLER */
-async function handle(cmd){
-
-    if(!cmd){
-        await typeLine("");
-        return;
-    }
-
-    switch(cmd){
-
-        case "help":
-            await typeLine("AVAILABLE COMMANDS:");
-            await typeLine("help\nrepos\nabout\nclear");
-            break;
-
-        case "about":
-            await typeLine("GAMERDAC ELITE BBS v3.0");
-            await typeLine("KEYBOARD NAVIGATION ENABLED");
-            break;
-
-        case "clear":
-            term.innerHTML="";
-            break;
-
-        case "repos":
-            selectionMode=true;
-
-            await typeLine("INITIATING GITHUB BREACH...");
-            await typeLine("ACCESSING USER: GamerDAC");
-            await new Promise(r=>setTimeout(r,800));
-
-            try{
-                const res=await fetch("https://api.github.com/users/GamerDAC/repos");
-                const data=await res.json();
-
-                if(!data.length){
-                    await typeLine("NO REPOSITORIES FOUND.");
-                    selectionMode=false;
-                    break;
-                }
-
-                await typeLine("=== REPOSITORIES ===");
-                await typeLine("↑ ↓ NAVIGATE | ENTER OPEN | ESC EXIT");
-
-                let selectedIndex=0;
-                const repoLines=[];
-
-                function render(){
-                    repoLines.forEach((line,i)=>{
-                        line.classList.remove("selected");
-                        if(i===selectedIndex){
-                            line.classList.add("selected");
-                            line.scrollIntoView({behavior:"smooth",block:"nearest"});
-                        }
-                    });
-                }
-
-                data.forEach(repo=>{
-                    const updated=new Date(repo.updated_at).toLocaleDateString();
-                    const line=document.createElement("div");
-                    line.innerHTML=
-                        `${repo.name}
-                        | ⭐ ${repo.stargazers_count}
-                        | ${repo.language || "N/A"}
-                        | Updated: ${updated}
-                        <br>${repo.description || "No description"}<br>`;
-                    line.style.padding="6px";
-                    term.appendChild(line);
-                    repoLines.push(line);
-                });
-
-                render();
-
-                function keyHandler(e){
-                    if(!selectionMode) return;
-
-                    if(e.key==="ArrowDown"){
-                        selectedIndex=(selectedIndex+1)%data.length;
-                        render();
-                        e.preventDefault();
-                    }
-                    else if(e.key==="ArrowUp"){
-                        selectedIndex=(selectedIndex-1+data.length)%data.length;
-                        render();
-                        e.preventDefault();
-                    }
-                    else if(e.key==="Enter"){
-                        window.open(data[selectedIndex].html_url,"_blank");
-                    }
-                    else if(e.key==="Escape"){
-                        document.removeEventListener("keydown",keyHandler);
-                        selectionMode=false;
-                        typeLine("EXITING REPO MODE...");
-                        prompt();
-                    }
-                }
-
-                document.addEventListener("keydown",keyHandler);
-
-            }catch(err){
-                await typeLine("GITHUB API ERROR");
-                selectionMode=false;
-            }
-
-            break;
-
-        default:
-            await typeLine("UNKNOWN COMMAND");
-    }
-}
-
+/* ===== POWER ===== */
+power.onclick=()=>{
+if(!powered){
+powered=true;
+power.classList.add("on");
+screen.classList.add("on");
+term.classList.add("flicker");
+staticLayer.classList.add("on");
+setTimeout(()=>staticLayer.classList.remove("on"),300);
+beep();
+term.innerHTML="";
 boot();
-</script>
+}else{
+powered=false;
+beep(200,150,"sawtooth");
+crtFlash.classList.add("active");
+setTimeout(()=>{
+screen.classList.remove("on");
+power.classList.remove("on");
+term.classList.remove("flicker");
+term.innerHTML="";
+crtFlash.classList.remove("active");
+},600);
+}
+};
 
+/* ===== TYPE ===== */
+function typeLine(text,speed=15){
+return new Promise(res=>{
+const line=document.createElement("div");
+term.appendChild(line);
+let i=0;
+(function typing(){
+if(i<text.length){
+line.textContent+=text[i++];
+setTimeout(typing,speed);
+}else res();
+})();
+});
+}
+
+/* ===== BOOT ===== */
+async function boot(){
+await typeLine("GamingIndustries Personal Computer XT");
+await typeLine("640KB RAM OK");
+await typeLine("INITIALIZING MODEM...");
+await new Promise(r=>setTimeout(r,800));
+await typeLine("2400 BAUD CONNECTED");
+await typeLine("-------------- type 'help' -----------------");
+prompt();
+}
+
+/* ===== PROMPT ===== */
+function prompt(){
+if(!powered)return;
+
+const line=document.createElement("div");
+const p=document.createElement("span");
+p.textContent="C:\\Users\\guest\\> ";
+
+const cmd=document.createElement("span");
+const cursor=document.createElement("span");
+cursor.className="cursor";
+
+line.append(p,cmd,cursor);
+term.appendChild(line);
+term.scrollTop=term.scrollHeight;
+
+let buffer="";
+
+function keyHandler(e){
+if(selectionMode||!powered)return;
+
+if(e.key.length===1){buffer+=e.key;cmd.textContent=buffer;}
+if(e.key==="Backspace"){buffer=buffer.slice(0,-1);cmd.textContent=buffer;}
+if(e.key==="Enter"){
+document.removeEventListener("keydown",keyHandler);
+cursor.remove();
+execute(buffer.trim().toLowerCase());
+}
+}
+document.addEventListener("keydown",keyHandler);
+}
+
+/* ===== EXECUTE ===== */
+async function execute(cmd){
+if(!cmd){prompt();return;}
+switch(cmd){
+
+case "help":
+await typeLine("help | about | clear | repos");
+break;
+
+case "about":
+await typeLine("GAMERDAC OS");
+await typeLine("SIGNAL STRENGTH: STRONG");
+break;
+
+case "clear":
+term.innerHTML="";
+break;
+
+case "repos":
+await loadRepos();
+return;
+
+default:
+await typeLine("Bad command or file name");
+}
+prompt();
+}
+
+/* ===== REPOS COMMAND ===== */
+async function loadRepos(){
+selectionMode=true;
+await typeLine("CONNECTING TO GITHUB NODE...");
+await new Promise(r=>setTimeout(r,600));
+
+try{
+const res=await fetch("https://api.github.com/users/GamerDAC/repos");
+const data=await res.json();
+
+if(!data.length){
+await typeLine("NO DATA.");
+selectionMode=false;
+prompt();
+return;
+}
+
+await typeLine("--------------------------------");
+await typeLine("↑ ↓ NAVIGATE | ENTER OPEN | ESC EXIT");
+await typeLine("--------------------------------");
+
+let selected=0;
+
+const lines=data.map(repo=>{
+const d=document.createElement("div");
+d.textContent=`${repo.name}  [★ ${repo.stargazers_count}]  ${repo.language||"N/A"}`;
+term.appendChild(d);
+return d;
+});
+
+function render(){
+lines.forEach((l,i)=>{
+l.classList.toggle("repo-selected",i===selected);
+if(i===selected)l.scrollIntoView({block:"nearest"});
+});
+}
+render();
+
+function nav(e){
+if(!selectionMode)return;
+
+if(e.key==="ArrowDown"){selected=(selected+1)%data.length;render();e.preventDefault();}
+if(e.key==="ArrowUp"){selected=(selected-1+data.length)%data.length;render();e.preventDefault();}
+if(e.key==="Enter"){window.open(data[selected].html_url,"_blank");}
+if(e.key==="Escape"){
+selectionMode=false;
+document.removeEventListener("keydown",nav);
+typeLine("DISCONNECTING...");
+prompt();
+}
+}
+
+document.addEventListener("keydown",nav);
+
+}catch{
+await typeLine("GITHUB API ERROR");
+selectionMode=false;
+prompt();
+}
+}
+</script>
 </body>
 </html>
