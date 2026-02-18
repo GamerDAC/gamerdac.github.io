@@ -1,382 +1,324 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GamerDAC Arcade</title>
-
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<title>GAMERDAC ELITE BBS</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 
 <style>
-:root {
-    --neon: #00ff66;
-    --neon-soft: rgba(0,255,102,0.6);
-    --bg-dark: #000;
+body{
+    margin:0;
+    background:black;
+    color:#00ff66;
+    font-family:'VT323', monospace;
+    font-size:20px;
+    overflow:hidden;
+    animation:flicker .15s infinite;
 }
 
-* { box-sizing: border-box; }
-
-body {
-    margin: 0;
-    min-height: 100vh;
-    background: radial-gradient(circle at top, #0b3d1e, #000 70%);
-    font-family: 'Press Start 2P', monospace;
-    color: #fff;
-    text-align: center;
-    overflow-x: hidden;
-}
-
-/* ===== STARFIELD ===== */
-.stars {
-    position: fixed;
-    inset: 0;
-    background: radial-gradient(#0f0 1px, transparent 1px);
-    background-size: 120px 120px;
-    opacity: 0.08;
-    animation: driftStars 60s linear infinite;
-    z-index: 0;
-}
-@keyframes driftStars {
-    from { background-position: 0 0; }
-    to { background-position: 1200px 800px; }
-}
-
-/* ===== CRT EFFECTS ===== */
-body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    background: repeating-linear-gradient(
+body::after{
+    content:"";
+    position:fixed;
+    top:0;left:0;width:100%;height:100%;
+    background:repeating-linear-gradient(
         to bottom,
-        rgba(255,255,255,0.03),
-        rgba(255,255,255,0.03) 1px,
+        rgba(0,255,100,.05),
+        rgba(0,255,100,.05) 1px,
+        transparent 1px,
         transparent 3px
     );
-    z-index: 10;
-}
-body::after {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    background: rgba(255,255,255,0.015);
-    animation: flicker 0.12s infinite;
-    z-index: 9;
-}
-@keyframes flicker {
-    50% { opacity: 0.03; }
+    pointer-events:none;
 }
 
-/* ===== GRID FLOOR ===== */
-.grid {
-    position: fixed;
-    bottom: -45%;
-    width: 100%;
-    height: 90%;
-    background:
-        linear-gradient(var(--neon) 1px, transparent 1px),
-        linear-gradient(90deg, var(--neon) 1px, transparent 1px);
-    background-size: 60px 60px;
-    transform: perspective(500px) rotateX(65deg);
-    opacity: 0.15;
-    z-index: 1;
+.vhs{ animation:vhsShift 0.3s infinite; }
+
+@keyframes vhsShift{
+    0%{filter:hue-rotate(0deg);}
+    50%{filter:hue-rotate(5deg);}
+    100%{filter:hue-rotate(0deg);}
 }
 
-/* ===== HEADER ===== */
-header {
-    position: relative;
-    z-index: 5;
-    padding: 60px 20px 30px;
-    transition: transform 0.15s ease-out;
+@keyframes flicker{
+    0%{opacity:.98;}
+    50%{opacity:1;}
+    100%{opacity:.97;}
 }
 
-h1 {
-    font-size: clamp(1.8rem, 6vw, 2.8rem);
-    color: var(--neon);
-    text-shadow: 0 0 20px var(--neon);
-    animation: pulse 2.5s infinite;
-}
-@keyframes pulse {
-    50% { text-shadow: 0 0 45px var(--neon-soft); }
+@keyframes pulseGlow{
+    0%{box-shadow:0 0 5px #00ff66;}
+    50%{box-shadow:0 0 20px #00ff66;}
+    100%{box-shadow:0 0 5px #00ff66;}
 }
 
-.subtitle {
-    font-size: 0.75rem;
-    color: var(--neon);
-    opacity: 0.8;
+canvas{position:fixed;top:0;left:0;z-index:-1;}
+
+.terminal{
+    padding:20px;
+    text-shadow:0 0 5px #00ff66,0 0 15px #00ff66;
+    max-height:100vh;
+    overflow-y:auto;
 }
 
-/* ===== GAMES ===== */
-.games {
-    position: relative;
-    z-index: 5;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 20px;
-    padding: 30px 20px;
-    max-width: 900px;
-    margin: auto;
-    transition: transform 0.15s ease-out;
+input{
+    background:transparent;
+    border:none;
+    color:#00ff66;
+    font-family:'VT323';
+    font-size:20px;
+    outline:none;
+    width:100%;
 }
 
-.game-card {
-    position: relative;
-    border: 2px solid var(--neon);
-    background: rgba(0,0,0,0.7);
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 0 20px var(--neon-soft);
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
+.cpu{
+    position:fixed;
+    top:10px;
+    right:20px;
 }
 
-.game-card:hover {
-    transform: translateY(-6px) scale(1.03);
-    box-shadow: 0 0 40px var(--neon);
+.feed{
+    position:fixed;
+    bottom:10px;
+    right:20px;
+    width:300px;
+    font-size:16px;
+    opacity:.8;
 }
 
-.game-card::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-        120deg,
-        transparent 40%,
-        rgba(0,255,102,0.15),
-        transparent 60%
-    );
-    opacity: 0;
-    transform: translateX(-100%);
-    transition: transform 0.5s ease, opacity 0.3s;
-}
-
-.game-card:hover::after {
-    opacity: 1;
-    transform: translateX(100%);
-}
-
-.game-card a {
-    text-decoration: none;
-    color: var(--neon);
-    display: block;
-}
-
-.game-title {
-    font-size: 0.8rem;
-    margin-bottom: 10px;
-}
-.game-note {
-    font-size: 0.6rem;
-    opacity: 0.7;
-}
-
-/* ===== ATTRACT MODE ===== */
-@keyframes attract {
-    0%,100% { box-shadow: 0 0 20px var(--neon-soft); }
-    50% { box-shadow: 0 0 60px var(--neon); }
-}
-.game-card:nth-child(odd) { animation: attract 4s infinite; }
-.game-card:nth-child(even) { animation: attract 4s infinite 2s; }
-
-/* ===== FOOTER ===== */
-.arcade-footer {
-    position: relative;
-    z-index: 5;
-    padding: 40px 20px 80px;
-    transition: transform 0.15s ease-out;
-}
-
-.invaders {
-    font-size: 1.6rem;
-    animation: drift 6s ease-in-out infinite;
-}
-@keyframes drift {
-    50% { transform: translateX(40px); }
-}
-
-.terminal {
-    margin: 30px auto;
-    max-width: 420px;
-    border: 2px solid var(--neon);
-    padding: 14px;
-    background: rgba(0,0,0,0.8);
-    font-size: 0.6rem;
-    color: var(--neon);
-}
-
-.stats {
-    display: flex;
-    justify-content: center;
-    gap: 16px;
-    font-size: 0.6rem;
-    color: var(--neon);
-    opacity: 0.8;
-}
-
-.coin {
-    margin-top: 30px;
-    font-size: 0.7rem;
-    color: var(--neon);
-    animation: blink 1.2s steps(2) infinite;
-}
-@keyframes blink { 50% { opacity: 0; } }
-
-/* ===== KONAMI MODE ===== */
-body.konami {
-    animation: konamiFlash 0.4s steps(2) 6;
-}
-@keyframes konamiFlash {
-    0% { filter: hue-rotate(0deg) brightness(1); }
-    100% { filter: hue-rotate(90deg) brightness(1.3); }
-}
-
-.konami-banner {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(0.8);
-    background: black;
-    border: 3px solid var(--neon);
-    padding: 20px;
-    color: var(--neon);
-    font-size: 0.7rem;
-    box-shadow: 0 0 40px var(--neon);
-    opacity: 0;
-    z-index: 100;
-    pointer-events: none;
-}
-.konami-banner.show {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-}
-
-/* ===== ACCESSIBILITY ===== */
-@media (prefers-reduced-motion: reduce) {
-    * { animation: none !important; }
+.selected{
+    background:#00ff66;
+    color:black;
+    padding:6px;
+    animation:pulseGlow 1s infinite;
 }
 </style>
 </head>
 
-<body>
+<body class="vhs">
 
-<div class="stars"></div>
-<div class="grid"></div>
-
-<header>
-    <h1>GamerDAC</h1>
-    <div class="subtitle">HTML5 ARCADE</div>
-</header>
-
-<section class="games">
-    <div class="game-card">
-        <a href="https://gamerdac.github.io/wholettheballroll/">
-            <div class="game-title">WHO LET THE BALL ROLL?</div>
-            <div class="game-note">📱 Mobile Game (PC Gameplay Not Recommended)</div>
-        </a>
-    </div>
-    <div class="game-card">
-        <a href="https://gamerdac.github.io/tapandchangelite/">
-            <div class="game-title">TAP & CHANGE (LITE)</div>
-            <div class="game-note">📱 Mobile Game (PC Gameplay Not Recommended)</div>
-        </a>
-    </div>
-</section>
-
-<footer class="arcade-footer">
-    <div class="invaders">👾 👾 👾 👾</div>
-
-    <div class="terminal">
-        <span id="terminal-text"></span>
-    </div>
-
-    <div class="stats">
-        <div>🎮 GAMES: <span id="game-count"></span></div>
-        <div>⚡ STATUS: ONLINE</div>
-        <div>🛠 HTML5</div>
-    </div>
-
-    <div class="coin">INSERT COIN...</div>
-</footer>
-
-<div class="konami-banner" id="konami-banner">
-★ CHEAT MODE ENABLED ★<br><br>
-UNLIMITED HYPE
-</div>
+<canvas id="matrix"></canvas>
+<div class="cpu" id="cpu">CPU: 0%</div>
+<div class="feed" id="feed"></div>
+<div class="terminal" id="terminal"></div>
 
 <script>
-/* ===== PARALLAX ===== */
-document.addEventListener("mousemove", e => {
-    const x = (e.clientX / innerWidth - 0.5) * 10;
-    const y = (e.clientY / innerHeight - 0.5) * 10;
-    document.querySelector("header").style.transform = `translate(${x}px,${y}px)`;
-    document.querySelector(".games").style.transform = `translate(${x*1.5}px,${y*1.5}px)`;
-    document.querySelector(".arcade-footer").style.transform = `translate(${x*2}px,${y*2}px)`;
-});
+const term=document.getElementById("terminal");
+const cpuDisplay=document.getElementById("cpu");
+const feed=document.getElementById("feed");
 
-/* ===== TERMINAL TYPE ===== */
-const messages = [
-    "BOOTING ARCADE OS...",
-    "LOADING NEON DRIVERS...",
-    "SYNCING GAME CORES...",
-    "PRESS START!"
+/* MATRIX */
+const canvas=document.getElementById("matrix");
+const ctx=canvas.getContext("2d");
+
+function resizeCanvas(){
+    canvas.height=window.innerHeight;
+    canvas.width=window.innerWidth;
+}
+resizeCanvas();
+window.addEventListener("resize",resizeCanvas);
+
+const letters="01";
+const fontSize=14;
+let columns=Math.floor(canvas.width/fontSize);
+let drops=Array(columns).fill(1);
+
+function draw(){
+    ctx.fillStyle="rgba(0,0,0,0.05)";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle="#00ff66";
+    ctx.font=fontSize+"px monospace";
+    drops.forEach((y,i)=>{
+        const text=letters[Math.floor(Math.random()*letters.length)];
+        ctx.fillText(text,i*fontSize,y*fontSize);
+        if(y*fontSize>canvas.height && Math.random()>0.975) drops[i]=0;
+        drops[i]++;
+    });
+}
+setInterval(draw,33);
+
+/* CPU */
+setInterval(()=>{
+    cpuDisplay.textContent="CPU: "+Math.floor(Math.random()*100)+"%";
+},500);
+
+/* FEED */
+const messages=[
+"[SYS] NODE 03 CONNECTED",
+"[WARN] TRACE ROUTE ACTIVE",
+"[SYS] ENCRYPTION ENABLED",
+"[MSG] meet @ 23:00 node 7",
+"[ALERT] gov node ping detected"
 ];
-let m = 0, c = 0;
-const terminal = document.getElementById("terminal-text");
 
-function type() {
-    if (c < messages[m].length) {
-        terminal.textContent += messages[m][c++];
-        setTimeout(type, 40);
-    } else {
-        setTimeout(() => {
-            c = 0;
-            m = (m + 1) % messages.length;
-            terminal.textContent = "";
-            type();
-        }, 1800);
+setInterval(()=>{
+    const msg=messages[Math.floor(Math.random()*messages.length)];
+    feed.innerHTML=msg+"<br>"+feed.innerHTML.slice(0,200);
+},3000);
+
+/* TYPE EFFECT */
+function typeLine(text,speed=15){
+    return new Promise(res=>{
+        const line=document.createElement("div");
+        term.appendChild(line);
+        let i=0;
+        function typing(){
+            if(i<text.length){
+                line.innerHTML+=text[i++];
+                setTimeout(typing,speed);
+            }else{
+                term.scrollTop=term.scrollHeight;
+                res();
+            }
+        }
+        typing();
+    });
+}
+
+/* BOOT */
+async function boot(){
+    await typeLine("PRESS ANY KEY TO INITIALIZE MODEM");
+    document.addEventListener("keydown",async ()=>{
+        await typeLine("BOOTING...");
+        await typeLine("640KB RAM OK");
+        await typeLine("CONNECT 2400 BAUD");
+        await typeLine("WELCOME ELITE USER");
+        prompt();
+    },{once:true});
+}
+
+/* PROMPT */
+let selectionMode=false;
+
+function prompt(){
+    if(selectionMode) return;
+
+    const input=document.createElement("input");
+    input.placeholder="bbs>";
+    term.appendChild(input);
+    input.focus();
+
+    input.addEventListener("keydown",async e=>{
+        if(e.key==="Enter"){
+            const cmd=input.value.trim().toLowerCase();
+            input.remove();
+            await handle(cmd);
+            prompt();
+        }
+    });
+}
+
+/* COMMAND HANDLER */
+async function handle(cmd){
+
+    if(!cmd){
+        await typeLine("");
+        return;
+    }
+
+    switch(cmd){
+
+        case "help":
+            await typeLine("AVAILABLE COMMANDS:");
+            await typeLine("help\nrepos\nabout\nclear");
+            break;
+
+        case "about":
+            await typeLine("GAMERDAC ELITE BBS v3.0");
+            await typeLine("KEYBOARD NAVIGATION ENABLED");
+            break;
+
+        case "clear":
+            term.innerHTML="";
+            break;
+
+        case "repos":
+            selectionMode=true;
+
+            await typeLine("INITIATING GITHUB BREACH...");
+            await typeLine("ACCESSING USER: GamerDAC");
+            await new Promise(r=>setTimeout(r,800));
+
+            try{
+                const res=await fetch("https://api.github.com/users/GamerDAC/repos");
+                const data=await res.json();
+
+                if(!data.length){
+                    await typeLine("NO REPOSITORIES FOUND.");
+                    selectionMode=false;
+                    break;
+                }
+
+                await typeLine("=== REPOSITORIES ===");
+                await typeLine("↑ ↓ NAVIGATE | ENTER OPEN | ESC EXIT");
+
+                let selectedIndex=0;
+                const repoLines=[];
+
+                function render(){
+                    repoLines.forEach((line,i)=>{
+                        line.classList.remove("selected");
+                        if(i===selectedIndex){
+                            line.classList.add("selected");
+                            line.scrollIntoView({behavior:"smooth",block:"nearest"});
+                        }
+                    });
+                }
+
+                data.forEach(repo=>{
+                    const updated=new Date(repo.updated_at).toLocaleDateString();
+                    const line=document.createElement("div");
+                    line.innerHTML=
+                        `${repo.name}
+                        | ⭐ ${repo.stargazers_count}
+                        | ${repo.language || "N/A"}
+                        | Updated: ${updated}
+                        <br>${repo.description || "No description"}<br>`;
+                    line.style.padding="6px";
+                    term.appendChild(line);
+                    repoLines.push(line);
+                });
+
+                render();
+
+                function keyHandler(e){
+                    if(!selectionMode) return;
+
+                    if(e.key==="ArrowDown"){
+                        selectedIndex=(selectedIndex+1)%data.length;
+                        render();
+                        e.preventDefault();
+                    }
+                    else if(e.key==="ArrowUp"){
+                        selectedIndex=(selectedIndex-1+data.length)%data.length;
+                        render();
+                        e.preventDefault();
+                    }
+                    else if(e.key==="Enter"){
+                        window.open(data[selectedIndex].html_url,"_blank");
+                    }
+                    else if(e.key==="Escape"){
+                        document.removeEventListener("keydown",keyHandler);
+                        selectionMode=false;
+                        typeLine("EXITING REPO MODE...");
+                        prompt();
+                    }
+                }
+
+                document.addEventListener("keydown",keyHandler);
+
+            }catch(err){
+                await typeLine("GITHUB API ERROR");
+                selectionMode=false;
+            }
+
+            break;
+
+        default:
+            await typeLine("UNKNOWN COMMAND");
     }
 }
-type();
 
-/* ===== GAME COUNT ===== */
-document.getElementById("game-count").textContent =
-    document.querySelectorAll(".game-card").length;
-
-/* ===== KONAMI CODE ===== */
-const konami = [
-    "ArrowUp","ArrowUp","ArrowDown","ArrowDown",
-    "ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"
-];
-let index = 0;
-
-document.addEventListener("keydown", e => {
-    if (e.key.toLowerCase() === konami[index].toLowerCase()) {
-        index++;
-        if (index === konami.length) {
-            activateKonami();
-            index = 0;
-        }
-    } else index = 0;
-});
-
-function activateKonami() {
-    document.body.classList.add("konami");
-    document.getElementById("konami-banner").classList.add("show");
-    terminal.textContent = "CHEAT MODE ACTIVATED";
-
-    document.querySelectorAll(".game-card").forEach(c =>
-        c.style.boxShadow = "0 0 60px var(--neon)"
-    );
-
-    setTimeout(() => {
-        document.body.classList.remove("konami");
-        document.getElementById("konami-banner").classList.remove("show");
-    }, 4000);
-}
+boot();
 </script>
-    <!-- Elfsight Audio Player | Untitled Audio Player -->
-<script src="https://elfsightcdn.com/platform.js" async></script>
-<div class="elfsight-app-a11f6643-89d0-41ed-a860-746cf2a13d98" data-elfsight-app-lazy></div>
 
 </body>
 </html>
