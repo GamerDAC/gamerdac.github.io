@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import base64
 import tempfile
 import threading
 import unittest
@@ -18,6 +19,7 @@ class AccountServerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.originals = {
             "account_db": server.ACCOUNT_DB_PATH,
+            "upload_root": server.UPLOAD_ROOT,
             "port": server.PORT,
             "host": server.HOST,
             "public_origin": server.PUBLIC_ORIGIN,
@@ -25,12 +27,14 @@ class AccountServerTests(unittest.TestCase):
         }
         self.directory = tempfile.TemporaryDirectory()
         server.ACCOUNT_DB_PATH = Path(self.directory.name) / "accounts.sqlite3"
+        server.UPLOAD_ROOT = Path(self.directory.name) / "uploads"
         server.PUBLIC_ORIGIN = ""
         server.PUBLIC_ORIGIN_PARTS = None
         server.initialize_account_database()
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.DltimeHandler)
         server.PORT = self.httpd.server_address[1]
         self.httpd.network_enabled = False
+        self.httpd.network_url = None
         self.httpd.accounts_enabled = True
         self.httpd.auth_attempts = {}
         self.httpd.auth_rate_lock = threading.Lock()
@@ -38,6 +42,8 @@ class AccountServerTests(unittest.TestCase):
         self.httpd.website_check_lock = threading.Lock()
         self.httpd.webpage_download_attempts = {}
         self.httpd.webpage_download_lock = threading.Lock()
+        self.httpd.media_shares = {}
+        self.httpd.media_share_lock = threading.Lock()
         self.origin = f"http://127.0.0.1:{server.PORT}"
         self.opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor()
@@ -51,6 +57,7 @@ class AccountServerTests(unittest.TestCase):
         self.thread.join(timeout=3)
         self.directory.cleanup()
         server.ACCOUNT_DB_PATH = self.originals["account_db"]
+        server.UPLOAD_ROOT = self.originals["upload_root"]
         server.PORT = self.originals["port"]
         server.HOST = self.originals["host"]
         server.PUBLIC_ORIGIN = self.originals["public_origin"]
@@ -114,6 +121,8 @@ class AccountServerTests(unittest.TestCase):
                 "url": "https://example.com/file.zip",
                 "name": "file.zip",
                 "date": "2026-10-19T00:00:00Z",
+                "tags": ["reference", "work"],
+                "note": "Keep for later.",
             }],
         }
         status, registered, cookie = self.request(
@@ -143,6 +152,8 @@ class AccountServerTests(unittest.TestCase):
         self.assertEqual(saved["data"]["progress"]["websiteVisits"], 1)
         self.assertEqual(len(saved["data"]["queue"]), 1)
         self.assertEqual(len(saved["data"]["history"]), 1)
+        self.assertEqual(saved["data"]["history"][0]["tags"], ["reference", "work"])
+        self.assertEqual(saved["data"]["history"][0]["note"], "Keep for later.")
 
         updated_data = {
             "progress": {"actionXp": 35, "visitedWebsiteUrls": ["https://example.com/", "https://example.org/"]},
@@ -395,6 +406,141 @@ class AccountServerTests(unittest.TestCase):
             )
         self.assertEqual(status, 200)
         self.assertFalse(result["downloaded"])
+
+    def test_lan_media_share_streams_ranges_and_can_be_revoked(self) -> None:
+        server.UPLOAD_ROOT.mkdir()
+        upload_id = "1234567890abcdef1234567890abcdef"
+        (server.UPLOAD_ROOT / f"{upload_id}--sample.mp4").write_bytes(b"0123456789")
+        self.httpd.network_enabled = True
+        self.httpd.network_url = f"{self.origin}/"
+
+        status, created, _ = self.request(
+            "/api/media/shares",
+            "POST",
+            {"uploadId": upload_id},
+            self.origin,
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(created["name"], "sample.mp4")
+        self.assertEqual(created["url"], f"{self.origin}/media/{created['token']}")
+
+        with self.opener.open(created["url"], timeout=5) as response:
+            player_page = response.read().decode("utf-8")
+            self.assertIn("<video id=\"player\"", player_page)
+            self.assertIn("surfyfriend.media.position.", player_page)
+            self.assertIn("no-referrer", response.headers.get("Referrer-Policy", ""))
+
+        with mock.patch.object(server.shutil, "which", return_value=None):
+            status, result, _ = self.request(
+                f"/media/{created['token']}/stream?transcode=1"
+            )
+        self.assertEqual(status, 503)
+        self.assertIn("FFmpeg is not installed", result["error"])
+
+        request = urllib.request.Request(
+            f"{self.origin}/media/{created['token']}/stream",
+            headers={"Range": "bytes=2-5"},
+        )
+        with self.opener.open(request, timeout=5) as response:
+            self.assertEqual(response.status, 206)
+            self.assertEqual(response.headers.get("Content-Range"), "bytes 2-5/10")
+            self.assertEqual(response.headers.get("Accept-Ranges"), "bytes")
+            self.assertEqual(response.headers.get("Content-Disposition", "").split(";")[0], "inline")
+            self.assertEqual(response.read(), b"2345")
+
+        status, shares, _ = self.request("/api/media/shares")
+        self.assertEqual(status, 200)
+        self.assertEqual(len(shares), 1)
+        status, revoked, _ = self.request(
+            f"/api/media/shares/{created['token']}",
+            "DELETE",
+            origin=self.origin,
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(revoked["revoked"])
+        with self.assertRaises(urllib.error.HTTPError) as error:
+            self.opener.open(created["url"], timeout=5)
+        self.assertEqual(error.exception.code, 404)
+
+    def test_media_library_metadata_and_local_artwork(self) -> None:
+        server.UPLOAD_ROOT.mkdir()
+        upload_id = "1234567890abcdef1234567890abcdef"
+        (server.UPLOAD_ROOT / f"{upload_id}--A.Sample.Movie.2024.mp4").write_bytes(b"media")
+        status, library, _ = self.request("/api/media/library")
+        self.assertEqual(status, 200)
+        item = library["items"][0]
+        self.assertEqual(item["metadata"]["title"], "A Sample Movie 2024")
+        self.assertIn("ffmpegAvailable", library)
+
+        status, result, _ = self.request(
+            f"/api/media/library/{upload_id}",
+            "PUT",
+            {
+                "title": "A Local Title",
+                "summary": "Saved only on this computer.",
+                "year": 2024,
+                "tags": ["favorite", "family"],
+            },
+            self.origin,
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(result["saved"])
+
+        png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 12
+        status, result, _ = self.request(
+            f"/api/media/library/{upload_id}",
+            "PUT",
+            {
+                "title": "A Local Title",
+                "summary": "Saved only on this computer.",
+                "year": 2024,
+                "tags": ["favorite", "family"],
+                "artwork": f"data:image/png;base64,{base64.b64encode(png).decode('ascii')}",
+            },
+            self.origin,
+        )
+        self.assertEqual(status, 200)
+        artwork_request = urllib.request.Request(
+            f"{self.origin}/api/media/library/{upload_id}/artwork"
+        )
+        with self.opener.open(artwork_request, timeout=5) as response:
+            self.assertEqual(response.headers.get("Content-Type"), "image/png")
+            self.assertEqual(response.read(), png)
+
+        status, library, _ = self.request("/api/media/library")
+        self.assertEqual(library["items"][0]["metadata"]["tags"], ["favorite", "family"])
+        self.assertTrue(library["items"][0]["artworkUrl"])
+
+        status, result, _ = self.request(
+            f"/api/media/library/{upload_id}",
+            "PUT",
+            {"title": "x" * 101, "summary": "", "year": None, "tags": []},
+            self.origin,
+        )
+        self.assertEqual(status, 400)
+
+    def test_lan_media_share_rejects_unsupported_files_and_requires_lan_mode(self) -> None:
+        server.UPLOAD_ROOT.mkdir()
+        html_id = "abcdef1234567890abcdef1234567890"
+        (server.UPLOAD_ROOT / f"{html_id}--page.html").write_text("<h1>not media</h1>")
+        status, result, _ = self.request(
+            "/api/media/shares",
+            "POST",
+            {"uploadId": html_id},
+            self.origin,
+        )
+        self.assertEqual(status, 403)
+        self.assertIn("--lan", result["error"])
+
+        self.httpd.network_url = f"{self.origin}/"
+        status, result, _ = self.request(
+            "/api/media/shares",
+            "POST",
+            {"uploadId": html_id},
+            self.origin,
+        )
+        self.assertEqual(status, 415)
+        self.assertIn("Only audio, video", result["error"])
 
     def test_remote_download_validation_rejects_private_and_nonstandard_targets(self) -> None:
         self.assertEqual(

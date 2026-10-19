@@ -30,9 +30,17 @@ const mediaStatus = document.getElementById("mediaStatus");
 const clearMediaButton = document.getElementById("clearMedia");
 let activeMediaObjectUrl = null;
 let mediaLoadVersion = 0;
+let mediaServerNetworkUrl = null;
+let mediaServerLanEnabled = false;
+let mediaShareBusy = false;
+let mediaServerShares = [];
+let mediaLibraryItems = [];
 
 const HISTORY_KEY = "dropzone.downloadHistory";
 const QUEUE_KEY = "dropzone.downloadQueue";
+const COLLECTIONS_KEY = "surfyfriend.linkCollections";
+const PRESETS_KEY = "surfyfriend.downloadPresets";
+const MEDIA_PLAYLIST_KEY = "surfyfriend.mediaPlaylist";
 // Preserve existing theme preferences across the SurfyFriend rename.
 const THEME_KEY = "dropzone.theme";
 const PROGRESS_KEY = "dropzone.progress";
@@ -48,6 +56,11 @@ const themeLabels = {
 };
 const historyLimit = 50;
 const queueLimit = 50;
+const savedGroupLimit = 50;
+const playlistLimit = 50;
+const selectedQueueIds = new Set();
+const localPlaylistFiles = new Map();
+let activePlaylistItemId = null;
 let activeAchievementFilter = "all";
 let activeSiteFilter = "all";
 let pageLinkCandidates = [];
@@ -67,6 +80,7 @@ const fullVersionOnlyPages = new Set([
     "explorer",
     "helper",
     "history",
+    "library",
     "media",
     "queue",
     "sites",
@@ -1059,6 +1073,7 @@ const pageDetails = {
     checker: { title: "Website checker", eyebrow: "CHECK BEFORE YOU VISIT" },
     media: { title: "Media player", eyebrow: "PLAY OR PREVIEW MEDIA" },
     queue: { title: "Download queue", eyebrow: "PLAN YOUR DOWNLOADS" },
+    library: { title: "Link library", eyebrow: "YOUR SAVED LINKS & PRESETS" },
     uploads: { title: "My uploads", eyebrow: "STORED ON THIS COMPUTER" },
     helper: { title: "AI helper", eyebrow: "PRIVATE, BUILT-IN GUIDANCE" },
     history: { title: "Download history", eyebrow: "YOUR RECENT LINKS" },
@@ -1724,7 +1739,13 @@ function readHistory() {
                 typeof item.url === "string" &&
                 typeof item.name === "string" &&
                 typeof item.date === "string"
-            )
+            ).map((item) => ({
+                ...item,
+                tags: Array.isArray(item.tags)
+                    ? [...new Set(item.tags.filter((tag) => typeof tag === "string").map((tag) => tag.trim()).filter(Boolean))].slice(0, 10)
+                    : [],
+                note: typeof item.note === "string" ? item.note.slice(0, 500) : "",
+            }))
             : [];
     } catch (error) {
         console.error("Could not read download history.", error);
@@ -1732,8 +1753,73 @@ function readHistory() {
     }
 }
 
+function readSavedGroups(key) {
+    try {
+        const savedGroups = JSON.parse(localStorage.getItem(key) || "[]");
+        if (!Array.isArray(savedGroups)) {
+            return [];
+        }
+        return savedGroups.filter((group) =>
+            group &&
+            typeof group.id === "string" &&
+            typeof group.name === "string" &&
+            group.name.trim() &&
+            group.name.length <= 60 &&
+            Array.isArray(group.items)
+        ).slice(0, savedGroupLimit).map((group) => ({
+            id: group.id,
+            name: group.name.trim(),
+            createdAt: typeof group.createdAt === "string" ? group.createdAt : new Date(0).toISOString(),
+            items: group.items.filter((item) => {
+                if (!item || typeof item.url !== "string" || typeof item.name !== "string") {
+                    return false;
+                }
+                return !validateDirectFileUrl(item.url).error;
+            }).slice(0, queueLimit).map((item) => {
+                const validation = validateDirectFileUrl(item.url);
+                return {
+                    url: validation.parsedUrl.href,
+                    name: safeFilename(item.name) || suggestedFilename(validation.parsedUrl, validation.provider),
+                };
+            }),
+        }));
+    } catch (error) {
+        console.error("Could not read saved link groups.", error);
+        return [];
+    }
+}
+
+function readMediaPlaylist() {
+    try {
+        const savedItems = JSON.parse(localStorage.getItem(MEDIA_PLAYLIST_KEY) || "[]");
+        if (!Array.isArray(savedItems)) {
+            return [];
+        }
+        return savedItems.filter((item) =>
+            item &&
+            typeof item.id === "string" &&
+            typeof item.url === "string" &&
+            typeof item.name === "string" &&
+            ["audio", "video", "image"].includes(item.type) &&
+            !validateDirectFileUrl(item.url).error
+        ).slice(0, playlistLimit).map((item) => ({
+            id: item.id,
+            url: validateDirectFileUrl(item.url).parsedUrl.href,
+            name: item.name.slice(0, 180),
+            type: item.type,
+            source: "url",
+        }));
+    } catch (error) {
+        console.error("Could not read media playlist.", error);
+        return [];
+    }
+}
+
 let downloadHistory = readHistory();
 let downloadQueue = readQueue();
+let downloadCollections = readSavedGroups(COLLECTIONS_KEY);
+let downloadPresets = readSavedGroups(PRESETS_KEY);
+let mediaPlaylist = readMediaPlaylist();
 
 function readQueue() {
     try {
@@ -2213,6 +2299,12 @@ function showPage(page, updateHash = true, trackHistory = true) {
     }
     if (pageName === "media") {
         mediaUrlInput.focus();
+        renderMediaPlaylist();
+        void refreshMediaServerShares();
+        void loadMediaLibrary();
+    }
+    if (pageName === "library") {
+        renderLibrary();
     }
     if (pageName === "explorer") {
         renderExplorerHistory();
@@ -2502,7 +2594,7 @@ function isYouTubeUrl(parsedUrl) {
 function renderHistory() {
     const query = toolbarSearch.value.trim().toLowerCase();
     const filteredHistory = downloadHistory.filter((item) =>
-        `${item.name} ${item.url}`.toLowerCase().includes(query)
+        `${item.name} ${item.url} ${(item.tags || []).join(" ")} ${item.note || ""}`.toLowerCase().includes(query)
     );
 
     historyList.replaceChildren();
@@ -2526,6 +2618,54 @@ function renderHistory() {
         date.className = "history-date";
         date.textContent = new Date(item.date).toLocaleString();
         details.append(name, link, date);
+
+        const annotations = document.createElement("div");
+        annotations.className = "history-annotations";
+        const tagsLabel = document.createElement("label");
+        tagsLabel.textContent = "Tags";
+        const tagsInput = document.createElement("input");
+        tagsInput.type = "text";
+        tagsInput.maxLength = 320;
+        tagsInput.value = (item.tags || []).join(", ");
+        tagsInput.placeholder = "Comma-separated tags";
+        tagsLabel.append(tagsInput);
+        const noteLabel = document.createElement("label");
+        noteLabel.textContent = "Note";
+        const noteInput = document.createElement("textarea");
+        noteInput.rows = 2;
+        noteInput.maxLength = 500;
+        noteInput.value = item.note || "";
+        noteInput.placeholder = "Optional note";
+        noteLabel.append(noteInput);
+        const saveAnnotation = document.createElement("button");
+        saveAnnotation.type = "button";
+        saveAnnotation.className = "secondary-button";
+        saveAnnotation.textContent = "Save tags and note";
+        saveAnnotation.addEventListener("click", () => {
+            const tags = tagsInput.value.split(",").map((tag) => tag.trim()).filter(Boolean);
+            const normalizedTags = [...new Set(tags.map((tag) => tag.toLocaleLowerCase()))];
+            if (tags.length > 10 || tags.some((tag) => tag.length > 30) || normalizedTags.length !== tags.length) {
+                showHistoryStatus("Use up to 10 unique tags, each no longer than 30 characters.");
+                return;
+            }
+            const updatedHistory = downloadHistory.map((entry) =>
+                entry.url === item.url
+                    ? { ...entry, tags, note: noteInput.value.trim().slice(0, 500) }
+                    : entry
+            );
+            const previousHistory = downloadHistory;
+            downloadHistory = updatedHistory;
+            if (!saveHistory()) {
+                downloadHistory = previousHistory;
+                showHistoryStatus("Tags and note could not be saved. Check your browser storage settings.");
+                return;
+            }
+            renderHistory();
+            renderActivityDashboard();
+            showHistoryStatus("Tags and note saved.");
+        });
+        annotations.append(tagsLabel, noteLabel, saveAnnotation);
+        details.append(annotations);
 
         const reopen = document.createElement("button");
         reopen.type = "button";
@@ -2551,7 +2691,268 @@ function renderHistory() {
     document.getElementById("lastDownload").textContent = downloadHistory[0]
         ? new Date(downloadHistory[0].date).toLocaleDateString()
         : "—";
+    document.getElementById("exportHistory").disabled = downloadHistory.length === 0;
+    renderActivityDashboard();
 }
+
+function downloadTextFile(filename, content, type) {
+    const objectUrl = URL.createObjectURL(new Blob([content], { type }));
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000);
+}
+
+function csvCell(value) {
+    let text = String(value ?? "");
+    if (/^[=+\-@\t\r]/.test(text)) {
+        text = `'${text}`;
+    }
+    return `"${text.replaceAll('"', '""')}"`;
+}
+
+document.getElementById("exportHistory").addEventListener("click", () => {
+    if (!downloadHistory.length) {
+        showHistoryStatus("There is no download history to export.");
+        return;
+    }
+    const format = document.getElementById("historyExportFormat").value;
+    const date = new Date().toISOString().slice(0, 10);
+    if (format === "json") {
+        downloadTextFile(
+            `surfyfriend-history-${date}.json`,
+            JSON.stringify(downloadHistory, null, 2),
+            "application/json;charset=utf-8"
+        );
+    } else {
+        const columns = ["name", "url", "date", "tags", "note"];
+        const rows = downloadHistory.map((item) => [
+            item.name,
+            item.url,
+            item.date,
+            (item.tags || []).join(", "),
+            item.note || "",
+        ]);
+        downloadTextFile(
+            `surfyfriend-history-${date}.csv`,
+            [columns, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n"),
+            "text/csv;charset=utf-8"
+        );
+    }
+    showHistoryStatus(`History exported as ${format.toUpperCase()}.`);
+});
+
+function renderActivityDashboard() {
+    const recentLimit = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const recentHistory = downloadHistory.filter((item) => {
+        const timestamp = Date.parse(item.date);
+        return Number.isFinite(timestamp) && timestamp >= recentLimit;
+    });
+    document.getElementById("activityWeekCount").textContent = String(recentHistory.length);
+    document.getElementById("activityCollectionCount").textContent = String(downloadCollections.length);
+    document.getElementById("activityPresetCount").textContent = String(downloadPresets.length);
+    document.getElementById("activityPlaylistCount").textContent = String(mediaPlaylist.length);
+    const recentList = document.getElementById("activityRecentList");
+    recentList.replaceChildren();
+    downloadHistory.slice(0, 3).forEach((item) => {
+        const row = document.createElement("li");
+        const name = document.createElement("strong");
+        name.textContent = item.name;
+        const date = document.createElement("span");
+        date.textContent = new Date(item.date).toLocaleDateString();
+        row.append(name, date);
+        recentList.append(row);
+    });
+    document.getElementById("activityRecentEmpty").hidden = downloadHistory.length > 0;
+}
+
+function parseSavedLinkLines(text, groupType) {
+    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (lines.length === 0) {
+        throw new Error("Add at least one HTTP or HTTPS link.");
+    }
+    if (lines.length > queueLimit) {
+        throw new Error(`A ${groupType} can contain up to ${queueLimit} links.`);
+    }
+    const seen = new Set();
+    return lines.map((line, index) => {
+        const [first, ...urlParts] = line.split("\t");
+        const name = urlParts.length ? safeFilename(first) : "";
+        const urlText = urlParts.length ? urlParts.join("\t").trim() : line;
+        const validation = validateDirectFileUrl(urlText);
+        if (validation.error) {
+            throw new Error(`Line ${index + 1}: ${validation.error}`);
+        }
+        const key = normalizedLinkKey(validation.parsedUrl.href);
+        if (seen.has(key)) {
+            throw new Error(`Line ${index + 1}: this URL is duplicated in the ${groupType}.`);
+        }
+        seen.add(key);
+        return {
+            url: validation.parsedUrl.href,
+            name: name || safeFilename(suggestedFilename(validation.parsedUrl, validation.provider)) || "download",
+        };
+    });
+}
+
+function saveSavedGroups(key, groups) {
+    try {
+        localStorage.setItem(key, JSON.stringify(groups));
+        return true;
+    } catch (error) {
+        console.error("Could not save a SurfyFriend link group.", error);
+        return false;
+    }
+}
+
+function createSavedGroup(name, items) {
+    return {
+        id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        name: name.trim(),
+        items,
+        createdAt: new Date().toISOString(),
+    };
+}
+
+function renderSavedGroupList(groups, listId, emptyId, kind) {
+    const list = document.getElementById(listId);
+    list.replaceChildren();
+    groups.forEach((group) => {
+        const card = document.createElement("article");
+        card.className = "saved-group-card";
+        const heading = document.createElement("div");
+        heading.className = "saved-group-heading";
+        const title = document.createElement("h4");
+        title.textContent = group.name;
+        const count = document.createElement("span");
+        count.textContent = `${group.items.length} ${group.items.length === 1 ? "link" : "links"}`;
+        heading.append(title, count);
+        const links = document.createElement("ul");
+        group.items.forEach((item) => {
+            const row = document.createElement("li");
+            const link = document.createElement("a");
+            link.href = item.url;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.textContent = item.name;
+            row.append(link);
+            links.append(row);
+        });
+        const actions = document.createElement("div");
+        actions.className = "saved-group-actions";
+        const use = document.createElement("button");
+        use.type = "button";
+        use.className = "primary-button";
+        use.textContent = kind === "preset" ? "Add preset to queue" : "Add collection to queue";
+        use.addEventListener("click", () => {
+            const result = addLinksToQueue(group.items, `from ${kind === "preset" ? "the preset" : "the collection"} “${group.name}”`);
+            setQueueStatus(result.message);
+        });
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "secondary-button danger-button";
+        remove.textContent = "Delete";
+        remove.addEventListener("click", () => {
+            const previousGroups = kind === "preset" ? downloadPresets : downloadCollections;
+            const nextGroups = previousGroups.filter((item) => item.id !== group.id);
+            const key = kind === "preset" ? PRESETS_KEY : COLLECTIONS_KEY;
+            if (!saveSavedGroups(key, nextGroups)) {
+                document.getElementById(kind === "preset" ? "presetStatus" : "collectionStatus")
+                    .textContent = "This group could not be deleted. Check your browser storage settings.";
+                return;
+            }
+            if (kind === "preset") {
+                downloadPresets = nextGroups;
+            } else {
+                downloadCollections = nextGroups;
+            }
+            renderLibrary();
+        });
+        actions.append(use, remove);
+        card.append(heading, links, actions);
+        list.append(card);
+    });
+    document.getElementById(emptyId).hidden = groups.length > 0;
+}
+
+function renderLibrary() {
+    renderSavedGroupList(downloadCollections, "collectionList", "collectionEmpty", "collection");
+    renderSavedGroupList(downloadPresets, "presetList", "presetEmpty", "preset");
+    renderActivityDashboard();
+}
+
+document.getElementById("collectionForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const name = document.getElementById("collectionName").value.trim();
+    const status = document.getElementById("collectionStatus");
+    if (!name || name.length > 60) {
+        status.textContent = "Enter a collection name up to 60 characters.";
+        return;
+    }
+    if (downloadCollections.length >= savedGroupLimit) {
+        status.textContent = `You can save up to ${savedGroupLimit} collections.`;
+        return;
+    }
+    if (downloadCollections.some((group) => group.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+        status.textContent = "A collection with that name already exists.";
+        return;
+    }
+    try {
+        const group = createSavedGroup(name, parseSavedLinkLines(
+            document.getElementById("collectionUrls").value,
+            "collection"
+        ));
+        const nextGroups = [group, ...downloadCollections];
+        if (!saveSavedGroups(COLLECTIONS_KEY, nextGroups)) {
+            status.textContent = "The collection could not be saved. Check your browser storage settings.";
+            return;
+        }
+        downloadCollections = nextGroups;
+        event.currentTarget.reset();
+        status.textContent = `Saved “${group.name}” with ${group.items.length} links.`;
+        renderLibrary();
+    } catch (error) {
+        status.textContent = error.message;
+    }
+});
+
+document.getElementById("presetForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const name = document.getElementById("presetName").value.trim();
+    const status = document.getElementById("presetStatus");
+    if (!name || name.length > 60) {
+        status.textContent = "Enter a preset name up to 60 characters.";
+        return;
+    }
+    if (downloadPresets.length >= savedGroupLimit) {
+        status.textContent = `You can save up to ${savedGroupLimit} presets.`;
+        return;
+    }
+    if (downloadPresets.some((group) => group.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+        status.textContent = "A preset with that name already exists.";
+        return;
+    }
+    try {
+        const group = createSavedGroup(name, parseSavedLinkLines(
+            document.getElementById("presetUrls").value,
+            "preset"
+        ));
+        const nextGroups = [group, ...downloadPresets];
+        if (!saveSavedGroups(PRESETS_KEY, nextGroups)) {
+            status.textContent = "The preset could not be saved. Check your browser storage settings.";
+            return;
+        }
+        downloadPresets = nextGroups;
+        event.currentTarget.reset();
+        status.textContent = `Saved “${group.name}” with ${group.items.length} links.`;
+        renderLibrary();
+    } catch (error) {
+        status.textContent = error.message;
+    }
+});
 
 function validateDirectFileUrl(rawUrl) {
     let parsedUrl;
@@ -2662,13 +3063,15 @@ function clearMediaPreview() {
     mediaDetails.textContent = "Choose a file or paste a direct link to get started.";
     clearMediaButton.hidden = true;
     mediaStatus.textContent = "";
+    activePlaylistItemId = null;
 }
 
-function showMediaPreview(type, source, name, sourceDescription, objectUrl = null) {
+function showMediaPreview(type, source, name, sourceDescription, objectUrl = null, playlistItemId = null) {
     clearMediaPreview();
     const loadVersion = mediaLoadVersion;
     let rewarded = false;
     activeMediaObjectUrl = objectUrl;
+    activePlaylistItemId = playlistItemId;
     mediaTitle.textContent = name;
     mediaDetails.textContent = `${type[0].toUpperCase()}${type.slice(1)} · ${sourceDescription}`;
     mediaEmpty.hidden = true;
@@ -2695,6 +3098,11 @@ function showMediaPreview(type, source, name, sourceDescription, objectUrl = nul
     } else {
         preview.controls = true;
         preview.preload = "metadata";
+        preview.addEventListener("ended", () => {
+            if (loadVersion === mediaLoadVersion && activePlaylistItemId === playlistItemId && playlistItemId) {
+                advanceMediaPlaylist(1);
+            }
+        });
         if (type === "video") {
             preview.playsInline = true;
             preview.addEventListener("loadedmetadata", () => {
@@ -2766,6 +3174,8 @@ document.getElementById("mediaUrlForm").addEventListener("submit", (event) => {
         return;
     }
     mediaFileInput.value = "";
+    document.getElementById("addMediaFileToPlaylist").disabled = true;
+    updateMediaShareButton();
     showMediaPreview(type, parsedUrl.href, name, `streamed from ${parsedUrl.hostname}`);
 });
 
@@ -2778,8 +3188,12 @@ mediaFileInput.addEventListener("change", () => {
     if (!type) {
         mediaStatus.textContent = "Choose an audio, video, or image file supported by your browser.";
         mediaFileInput.value = "";
+        document.getElementById("addMediaFileToPlaylist").disabled = true;
+        document.getElementById("createMediaShare").disabled = true;
         return;
     }
+    document.getElementById("addMediaFileToPlaylist").disabled = false;
+    updateMediaShareButton();
     mediaUrlInput.value = "";
     const objectUrl = URL.createObjectURL(file);
     showMediaPreview(type, objectUrl, file.name, "on this device", objectUrl);
@@ -2789,6 +3203,669 @@ clearMediaButton.addEventListener("click", () => {
     clearMediaPreview();
     mediaUrlInput.value = "";
     mediaFileInput.value = "";
+    document.getElementById("addMediaFileToPlaylist").disabled = true;
+    updateMediaShareButton();
+});
+
+function saveMediaPlaylist() {
+    try {
+        const persistentItems = mediaPlaylist
+            .filter((item) => item.source === "url")
+            .map(({ id, url, name, type }) => ({ id, url, name, type }));
+        localStorage.setItem(MEDIA_PLAYLIST_KEY, JSON.stringify(persistentItems));
+        return true;
+    } catch (error) {
+        console.error("Could not save the media playlist.", error);
+        return false;
+    }
+}
+
+function addMediaPlaylistItem(item) {
+    if (mediaPlaylist.length >= playlistLimit) {
+        document.getElementById("mediaPlaylistStatus").textContent =
+            `The playlist is full. You can save up to ${playlistLimit} items.`;
+        return false;
+    }
+    const duplicate = mediaPlaylist.some((existing) => item.source === "url"
+        ? existing.source === "url" && normalizedLinkKey(existing.url) === normalizedLinkKey(item.url)
+        : existing.source === "file" && existing.file.name === item.file.name &&
+            existing.file.size === item.file.size && existing.file.lastModified === item.file.lastModified);
+    if (duplicate) {
+        document.getElementById("mediaPlaylistStatus").textContent = `${item.name} is already in the playlist.`;
+        return false;
+    }
+    const previousPlaylist = mediaPlaylist;
+    mediaPlaylist = [...mediaPlaylist, {
+        ...item,
+        id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    }];
+    if (item.source === "url" && !saveMediaPlaylist()) {
+        mediaPlaylist = previousPlaylist;
+        document.getElementById("mediaPlaylistStatus").textContent =
+            "The playlist could not be saved. Check your browser storage settings.";
+        return false;
+    }
+    renderMediaPlaylist();
+    document.getElementById("mediaPlaylistStatus").textContent =
+        `${item.name} added${item.source === "file" ? " for this session" : ""}.`;
+    return true;
+}
+
+function renderMediaPlaylist() {
+    const list = document.getElementById("mediaPlaylistList");
+    list.replaceChildren();
+    mediaPlaylist.forEach((item, index) => {
+        const row = document.createElement("article");
+        row.className = "media-playlist-item";
+        const details = document.createElement("div");
+        const name = document.createElement("strong");
+        name.textContent = item.name;
+        const source = document.createElement("span");
+        source.textContent = item.source === "file" ? "This device · current session" : item.url;
+        details.append(name, source);
+        const actions = document.createElement("div");
+        actions.className = "media-playlist-item-actions";
+        const play = document.createElement("button");
+        play.type = "button";
+        play.className = "secondary-button";
+        play.textContent = "Play";
+        play.addEventListener("click", () => playMediaPlaylistItem(item.id));
+        const up = document.createElement("button");
+        up.type = "button";
+        up.className = "secondary-button";
+        up.textContent = "↑";
+        up.setAttribute("aria-label", `Move ${item.name} up`);
+        up.disabled = index === 0;
+        up.addEventListener("click", () => moveMediaPlaylistItem(item.id, -1));
+        const down = document.createElement("button");
+        down.type = "button";
+        down.className = "secondary-button";
+        down.textContent = "↓";
+        down.setAttribute("aria-label", `Move ${item.name} down`);
+        down.disabled = index === mediaPlaylist.length - 1;
+        down.addEventListener("click", () => moveMediaPlaylistItem(item.id, 1));
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "secondary-button danger-button";
+        remove.textContent = "Remove";
+        remove.addEventListener("click", () => removeMediaPlaylistItem(item.id));
+        actions.append(play, up, down, remove);
+        row.append(details, actions);
+        list.append(row);
+    });
+    document.getElementById("mediaPlaylistEmpty").hidden = mediaPlaylist.length > 0;
+    document.getElementById("playMediaPlaylist").disabled = mediaPlaylist.length === 0;
+    document.getElementById("previousMediaPlaylistItem").disabled = mediaPlaylist.length < 2;
+    document.getElementById("nextMediaPlaylistItem").disabled = mediaPlaylist.length < 2;
+    renderActivityDashboard();
+}
+
+function playMediaPlaylistItem(id) {
+    const item = mediaPlaylist.find((entry) => entry.id === id);
+    if (!item) {
+        return;
+    }
+    if (item.source === "file") {
+        if (!(item.file instanceof File)) {
+            document.getElementById("mediaPlaylistStatus").textContent =
+                "That local file is no longer available. Add it to the playlist again.";
+            return;
+        }
+        const objectUrl = URL.createObjectURL(item.file);
+        showMediaPreview(item.type, objectUrl, item.name, "on this device", objectUrl, item.id);
+    } else {
+        const hostname = new URL(item.url).hostname;
+        showMediaPreview(item.type, item.url, item.name, `streamed from ${hostname}`, null, item.id);
+    }
+    const currentIndex = mediaPlaylist.findIndex((entry) => entry.id === item.id);
+    document.getElementById("mediaPlaylistStatus").textContent =
+        `Playing item ${currentIndex + 1} of ${mediaPlaylist.length}. Audio and video advance automatically when playback ends.`;
+}
+
+function advanceMediaPlaylist(direction) {
+    if (!mediaPlaylist.length) {
+        return;
+    }
+    const currentIndex = mediaPlaylist.findIndex((item) => item.id === activePlaylistItemId);
+    const nextIndex = currentIndex < 0
+        ? (direction > 0 ? 0 : mediaPlaylist.length - 1)
+        : currentIndex + direction;
+    if (nextIndex < 0 || nextIndex >= mediaPlaylist.length) {
+        document.getElementById("mediaPlaylistStatus").textContent = "You reached the end of the playlist.";
+        return;
+    }
+    playMediaPlaylistItem(mediaPlaylist[nextIndex].id);
+}
+
+function moveMediaPlaylistItem(id, direction) {
+    const index = mediaPlaylist.findIndex((item) => item.id === id);
+    const targetIndex = index + direction;
+    if (index < 0 || targetIndex < 0 || targetIndex >= mediaPlaylist.length) {
+        return;
+    }
+    const previousPlaylist = mediaPlaylist;
+    mediaPlaylist = [...mediaPlaylist];
+    [mediaPlaylist[index], mediaPlaylist[targetIndex]] = [mediaPlaylist[targetIndex], mediaPlaylist[index]];
+    if (!saveMediaPlaylist()) {
+        mediaPlaylist = previousPlaylist;
+        document.getElementById("mediaPlaylistStatus").textContent =
+            "The playlist order could not be saved. Check your browser storage settings.";
+        return;
+    }
+    renderMediaPlaylist();
+}
+
+function removeMediaPlaylistItem(id) {
+    const previousPlaylist = mediaPlaylist;
+    mediaPlaylist = mediaPlaylist.filter((item) => item.id !== id);
+    if (!saveMediaPlaylist()) {
+        mediaPlaylist = previousPlaylist;
+        document.getElementById("mediaPlaylistStatus").textContent =
+            "That playlist item could not be removed. Check your browser storage settings.";
+        return;
+    }
+    if (activePlaylistItemId === id) {
+        clearMediaPreview();
+    }
+    renderMediaPlaylist();
+}
+
+function mediaUrlDetails() {
+    const rawUrl = mediaUrlInput.value.trim();
+    let parsedUrl;
+    try {
+        parsedUrl = new URL(rawUrl);
+    } catch {
+        return { error: "Enter a complete media link starting with https:// or http://." };
+    }
+    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+        return { error: "Only direct HTTP and HTTPS media links are supported." };
+    }
+    if (isYouTubeUrl(parsedUrl)) {
+        return { error: "Streaming-site pages aren't direct media files. Use the service's official player or download options." };
+    }
+    const name = filenameFromUrl(parsedUrl);
+    const selectedType = mediaTypeSelect.value;
+    const type = selectedType === "auto" ? inferMediaType(name) : selectedType;
+    if (!type) {
+        return { error: "I couldn't identify an audio, video, or image file in that link. Check that it points directly to supported media." };
+    }
+    return { url: parsedUrl.href, name, type, hostname: parsedUrl.hostname };
+}
+
+document.getElementById("addMediaUrlToPlaylist").addEventListener("click", () => {
+    const media = mediaUrlDetails();
+    if (media.error) {
+        document.getElementById("mediaPlaylistStatus").textContent = media.error;
+        return;
+    }
+    addMediaPlaylistItem({ source: "url", url: media.url, name: media.name, type: media.type });
+});
+
+document.getElementById("addMediaFileToPlaylist").addEventListener("click", () => {
+    const file = mediaFileInput.files?.[0];
+    const type = file ? inferMediaType(file.name, file.type) : null;
+    if (!file || !type) {
+        document.getElementById("mediaPlaylistStatus").textContent =
+            "Choose a supported audio, video, or image file first.";
+        return;
+    }
+    addMediaPlaylistItem({ source: "file", file, name: file.name, type });
+});
+
+document.getElementById("playMediaPlaylist").addEventListener("click", () => advanceMediaPlaylist(1));
+document.getElementById("previousMediaPlaylistItem").addEventListener("click", () => advanceMediaPlaylist(-1));
+document.getElementById("nextMediaPlaylistItem").addEventListener("click", () => advanceMediaPlaylist(1));
+
+async function readMediaServerResponse(response) {
+    const contentType = response.headers.get("Content-Type") || "";
+    if (!contentType.includes("application/json")) {
+        throw new Error("The local media server did not return a JSON response.");
+    }
+    const payload = await response.json();
+    if (!response.ok) {
+        throw new Error(payload.error || `The media server request failed (HTTP ${response.status}).`);
+    }
+    return payload;
+}
+
+function updateMediaShareButton() {
+    const file = mediaFileInput.files?.[0];
+    const supportedType = file && inferMediaType(file.name, file.type);
+    const isSvg = file && /\.svgz?$/i.test(file.name);
+    const consentGiven = document.getElementById("mediaShareConsent").checked;
+    document.getElementById("createMediaShare").disabled =
+        mediaShareBusy || !mediaServerLanEnabled || !file || !supportedType || isSvg || !consentGiven;
+}
+
+function renderMediaServerShares() {
+    const list = document.getElementById("mediaServerShareList");
+    list.replaceChildren();
+    mediaServerShares.forEach((share) => {
+        const row = document.createElement("article");
+        row.className = "media-server-share";
+        const link = document.createElement("a");
+        link.href = share.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = `${share.name} · Open stream ↗`;
+        const copy = document.createElement("button");
+        copy.type = "button";
+        copy.className = "secondary-button";
+        copy.textContent = "Copy link";
+        copy.addEventListener("click", async () => {
+            try {
+                await navigator.clipboard.writeText(share.url);
+                document.getElementById("mediaServerShareStatus").textContent =
+                    `Copied the share link for ${share.name}.`;
+            } catch (error) {
+                console.error("Could not copy the media share link.", error);
+                document.getElementById("mediaServerShareStatus").textContent =
+                    `Copy was blocked by the browser. Select and copy this link: ${share.url}`;
+            }
+        });
+        const revoke = document.createElement("button");
+        revoke.type = "button";
+        revoke.className = "secondary-button danger-button";
+        revoke.textContent = "Revoke";
+        revoke.addEventListener("click", async () => {
+            revoke.disabled = true;
+            try {
+                await readMediaServerResponse(await fetch(
+                    `/api/media/shares/${encodeURIComponent(share.token)}`,
+                    { method: "DELETE", cache: "no-store" }
+                ));
+                await refreshMediaServerShares();
+                document.getElementById("mediaServerShareStatus").textContent =
+                    `The share link for ${share.name} was revoked.`;
+            } catch (error) {
+                console.error("Could not revoke the media share.", error);
+                document.getElementById("mediaServerShareStatus").textContent =
+                    `Could not revoke that media share. ${error.message}`;
+                revoke.disabled = false;
+            }
+        });
+        row.append(link, copy, revoke);
+        list.append(row);
+    });
+}
+
+async function refreshMediaServerShares() {
+    try {
+        const status = await readMediaServerResponse(
+            await fetch("/api/status", { cache: "no-store" })
+        );
+        if (
+            typeof status.networkEnabled !== "boolean" ||
+            (status.networkUrl !== null && typeof status.networkUrl !== "string") ||
+            typeof status.uploadsEnabled !== "boolean" ||
+            typeof status.ffmpegAvailable !== "boolean"
+        ) {
+            throw new Error("The local server returned an invalid network-sharing status.");
+        }
+        mediaServerLanEnabled = status.networkEnabled && Boolean(status.networkUrl) && status.uploadsEnabled;
+        mediaServerNetworkUrl = mediaServerLanEnabled ? status.networkUrl : null;
+        document.getElementById("mediaServerStatus").textContent = mediaServerLanEnabled
+            ? `LAN sharing is enabled at ${mediaServerNetworkUrl}. Selected files are copied to this computer's local shelf and served over unencrypted HTTP. ${status.ffmpegAvailable ? "FFmpeg-compatible playback is available." : "Install FFmpeg separately to enable compatible playback."}`
+            : "LAN sharing is off or unavailable. Run python3 server.py --lan and open SurfyFriend at http://127.0.0.1:8765/ on this computer.";
+        if (mediaServerLanEnabled) {
+            const shares = await readMediaServerResponse(
+                await fetch("/api/media/shares", { cache: "no-store" })
+            );
+            if (!Array.isArray(shares) || shares.some((share) =>
+                !share ||
+                typeof share.token !== "string" ||
+                typeof share.name !== "string" ||
+                typeof share.url !== "string"
+            )) {
+                throw new Error("The local server returned an invalid media share list.");
+            }
+            mediaServerShares = shares;
+            renderMediaServerShares();
+        } else {
+            mediaServerShares = [];
+            renderMediaServerShares();
+        }
+    } catch (error) {
+        console.error("Could not check local media server status.", error);
+        mediaServerLanEnabled = false;
+        mediaServerNetworkUrl = null;
+        mediaServerShares = [];
+        renderMediaServerShares();
+        document.getElementById("mediaServerStatus").textContent =
+            `Local LAN media sharing is unavailable at this address. Run python3 server.py --lan and use the local SurfyFriend address. ${error.message}`;
+    } finally {
+        updateMediaShareButton();
+        renderMediaLibrary();
+    }
+}
+
+function formatMediaSize(bytes) {
+    if (!Number.isFinite(bytes) || bytes < 0) {
+        return "Unknown size";
+    }
+    const units = ["B", "KB", "MB", "GB"];
+    let value = bytes;
+    let unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+        value /= 1024;
+        unit += 1;
+    }
+    return `${value.toFixed(unit ? 1 : 0)} ${units[unit]}`;
+}
+
+function createMediaField(labelText, input, id) {
+    const label = document.createElement("label");
+    label.htmlFor = id;
+    label.textContent = labelText;
+    input.id = id;
+    label.append(input);
+    return label;
+}
+
+async function readLocalArtwork(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.addEventListener("load", () => {
+            if (typeof reader.result === "string") {
+                resolve(reader.result);
+            } else {
+                reject(new Error("The selected cover art could not be read."));
+            }
+        }, { once: true });
+        reader.addEventListener("error", () => {
+            reject(reader.error || new Error("The selected cover art could not be read."));
+        }, { once: true });
+        reader.readAsDataURL(file);
+    });
+}
+
+function mediaManagementIsLocal() {
+    return /^(localhost|127(?:\.\d{1,3}){3}|\[?::1\]?)$/i.test(window.location.hostname);
+}
+
+function renderMediaLibrary() {
+    const list = document.getElementById("mediaLibraryList");
+    list.replaceChildren();
+    const query = document.getElementById("mediaLibrarySearch").value.trim().toLocaleLowerCase();
+    const sort = document.getElementById("mediaLibrarySort").value;
+    const visibleItems = mediaLibraryItems.filter((item) =>
+        `${item.metadata.title} ${item.name} ${(item.metadata.tags || []).join(" ")}`
+            .toLocaleLowerCase().includes(query)
+    );
+    visibleItems.sort((left, right) => {
+        if (sort === "title") {
+            return left.metadata.title.localeCompare(right.metadata.title);
+        }
+        if (sort === "year") {
+            return (right.metadata.year || 0) - (left.metadata.year || 0) ||
+                left.metadata.title.localeCompare(right.metadata.title);
+        }
+        if (sort === "size") {
+            return right.bytes - left.bytes;
+        }
+        return (Date.parse(right.modifiedAt) || 0) - (Date.parse(left.modifiedAt) || 0);
+    });
+    visibleItems.forEach((item) => {
+        const card = document.createElement("article");
+        card.className = "media-library-item";
+        const artwork = document.createElement("img");
+        artwork.className = "media-library-artwork";
+        artwork.alt = "";
+        artwork.hidden = !item.artworkUrl;
+        if (item.artworkUrl) {
+            artwork.src = item.artworkUrl;
+        }
+        const details = document.createElement("div");
+        details.className = "media-library-details";
+        const filename = document.createElement("span");
+        filename.className = "media-library-filename";
+        filename.textContent = `${item.mediaType} · ${formatMediaSize(item.bytes)} · ${item.name}`;
+        details.append(filename);
+        if (item.metadata.year) {
+            const year = document.createElement("span");
+            year.className = "media-library-year";
+            year.textContent = String(item.metadata.year);
+            details.append(year);
+        }
+
+        const fields = document.createElement("div");
+        fields.className = "media-library-fields";
+        const title = document.createElement("input");
+        title.type = "text";
+        title.maxLength = 100;
+        title.required = true;
+        title.value = item.metadata.title;
+        fields.append(createMediaField("Title", title, `media-title-${item.id}`));
+        const yearInput = document.createElement("input");
+        yearInput.type = "number";
+        yearInput.min = "1888";
+        yearInput.max = "2100";
+        yearInput.value = item.metadata.year || "";
+        fields.append(createMediaField("Year", yearInput, `media-year-${item.id}`));
+        const summary = document.createElement("textarea");
+        summary.rows = 2;
+        summary.maxLength = 500;
+        summary.value = item.metadata.summary;
+        fields.append(createMediaField("Description", summary, `media-summary-${item.id}`));
+        const tags = document.createElement("input");
+        tags.type = "text";
+        tags.maxLength = 320;
+        tags.value = (item.metadata.tags || []).join(", ");
+        fields.append(createMediaField("Tags", tags, `media-tags-${item.id}`));
+        const artworkInput = document.createElement("input");
+        artworkInput.type = "file";
+        artworkInput.accept = "image/jpeg,image/png,image/webp";
+        fields.append(createMediaField("Cover art (JPEG, PNG, or WebP; up to 2 MB)", artworkInput, `media-artwork-${item.id}`));
+        const clearArtworkLabel = document.createElement("label");
+        const clearArtwork = document.createElement("input");
+        clearArtwork.type = "checkbox";
+        clearArtwork.checked = false;
+        clearArtwork.disabled = !item.artworkUrl;
+        clearArtworkLabel.append(clearArtwork, document.createTextNode(" Remove saved cover art"));
+
+        const actions = document.createElement("div");
+        actions.className = "media-library-actions";
+        const save = document.createElement("button");
+        save.type = "button";
+        save.className = "secondary-button";
+        save.textContent = "Save details";
+        const share = document.createElement("button");
+        share.type = "button";
+        share.className = "primary-button";
+        share.textContent = "Share on Wi-Fi";
+        share.disabled = !mediaServerLanEnabled || !mediaManagementIsLocal();
+        share.title = !mediaManagementIsLocal()
+            ? "Open SurfyFriend on this computer using http://127.0.0.1:8765/ to manage shares."
+            : mediaServerLanEnabled ? "Create a local-network media share" : "Start the Python server with --lan to share media.";
+        const itemStatus = document.createElement("p");
+        itemStatus.className = "status";
+        itemStatus.setAttribute("role", "status");
+        itemStatus.setAttribute("aria-live", "polite");
+        save.addEventListener("click", async () => {
+            const tagList = tags.value.split(",").map((tag) => tag.trim()).filter(Boolean);
+            const uniqueTags = [...new Set(tagList.map((tag) => tag.toLocaleLowerCase()))];
+            const yearValue = yearInput.value.trim();
+            const year = yearValue ? Number(yearValue) : null;
+            if (!title.value.trim() || title.value.trim().length > 100) {
+                itemStatus.textContent = "Enter a title up to 100 characters.";
+                return;
+            }
+            if (year !== null && (!Number.isInteger(year) || year < 1888 || year > 2100)) {
+                itemStatus.textContent = "Enter a year between 1888 and 2100, or leave it blank.";
+                return;
+            }
+            if (tagList.length > 10 || tagList.some((tag) => tag.length > 30) || uniqueTags.length !== tagList.length) {
+                itemStatus.textContent = "Use up to 10 unique tags, each no longer than 30 characters.";
+                return;
+            }
+            const cover = artworkInput.files?.[0];
+            if (cover && (cover.size > 2 * 1024 * 1024 ||
+                !["image/jpeg", "image/png", "image/webp"].includes(cover.type))) {
+                itemStatus.textContent = "Choose a JPEG, PNG, or WebP cover image smaller than 2 MB.";
+                return;
+            }
+            save.disabled = true;
+            try {
+                const data = {
+                    title: title.value.trim(),
+                    summary: summary.value.trim(),
+                    year,
+                    tags: tagList,
+                };
+                if (clearArtwork.checked) {
+                    data.artwork = null;
+                } else if (cover) {
+                    data.artwork = await readLocalArtwork(cover);
+                }
+                await readMediaServerResponse(await fetch(`/api/media/library/${item.id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(data),
+                }));
+                await loadMediaLibrary();
+                document.getElementById("mediaLibraryStatus").textContent =
+                    `Saved local details for ${title.value.trim()}.`;
+            } catch (error) {
+                console.error("Could not save local media details.", error);
+                itemStatus.textContent = `Could not save media details. ${error.message}`;
+            } finally {
+                save.disabled = false;
+            }
+        });
+        share.addEventListener("click", async () => {
+            share.disabled = true;
+            try {
+                const created = await readMediaServerResponse(await fetch("/api/media/shares", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ uploadId: item.id }),
+                }));
+                await refreshMediaServerShares();
+                document.getElementById("mediaServerShareStatus").textContent =
+                    `${item.metadata.title} is ready to stream. Copy its link below.`;
+                share.title = created.url;
+            } catch (error) {
+                console.error("Could not create a local media share.", error);
+                itemStatus.textContent = `Could not share this media. ${error.message}`;
+            } finally {
+                share.disabled = !mediaServerLanEnabled || !mediaManagementIsLocal();
+            }
+        });
+        actions.append(save, share);
+        fields.append(clearArtworkLabel, actions, itemStatus);
+        card.append(artwork, details, fields);
+        list.append(card);
+    });
+    document.getElementById("mediaLibraryEmpty").hidden =
+        mediaLibraryItems.length > 0 && visibleItems.length > 0;
+    if (mediaLibraryItems.length > 0 && visibleItems.length === 0) {
+        document.getElementById("mediaLibraryEmpty").textContent = "No media matches this search.";
+        document.getElementById("mediaLibraryEmpty").hidden = false;
+    } else {
+        document.getElementById("mediaLibraryEmpty").textContent =
+            mediaLibraryItems.length ? "No media matches this search." : "No audio or video files are saved in My uploads yet.";
+    }
+}
+
+async function loadMediaLibrary() {
+    try {
+        const response = await readMediaServerResponse(
+            await fetch("/api/media/library", { cache: "no-store" })
+        );
+        if (!response || !Array.isArray(response.items) ||
+            response.items.some((item) =>
+                !item ||
+                !/^[0-9a-f]{32}$/.test(item.id) ||
+                typeof item.name !== "string" ||
+                !Number.isSafeInteger(item.bytes) ||
+                typeof item.modifiedAt !== "string" ||
+                typeof item.mediaType !== "string" ||
+                !item.metadata ||
+                typeof item.metadata.title !== "string" ||
+                typeof item.metadata.summary !== "string" ||
+                (item.metadata.year !== null && !Number.isInteger(item.metadata.year)) ||
+                !Array.isArray(item.metadata.tags) ||
+                typeof item.artworkUrl !== "string"
+            )
+        ) {
+            throw new Error("The local server returned an invalid media library.");
+        }
+        mediaLibraryItems = response.items;
+        renderMediaLibrary();
+        document.getElementById("mediaLibraryStatus").textContent =
+            `${mediaLibraryItems.length} local media ${mediaLibraryItems.length === 1 ? "item" : "items"} available.`;
+    } catch (error) {
+        console.error("Could not load the local media library.", error);
+        mediaLibraryItems = [];
+        renderMediaLibrary();
+        document.getElementById("mediaLibraryStatus").textContent =
+            `Could not load the local library. Run SurfyFriend's Python server and open its local address. ${error.message}`;
+    }
+}
+
+document.getElementById("mediaLibrarySearch").addEventListener("input", renderMediaLibrary);
+document.getElementById("mediaLibrarySort").addEventListener("change", renderMediaLibrary);
+document.getElementById("refreshMediaLibrary").addEventListener("click", async () => {
+    await loadMediaLibrary();
+    await refreshMediaServerShares();
+});
+
+document.getElementById("mediaShareConsent").addEventListener("change", updateMediaShareButton);
+document.getElementById("createMediaShare").addEventListener("click", async () => {
+    const file = mediaFileInput.files?.[0];
+    if (!file || !mediaServerLanEnabled || !document.getElementById("mediaShareConsent").checked) {
+        updateMediaShareButton();
+        return;
+    }
+    if (file.size > 500 * 1024 * 1024) {
+        document.getElementById("mediaServerShareStatus").textContent =
+            "Files larger than 500 MB cannot be uploaded to the local media server.";
+        return;
+    }
+    if (!inferMediaType(file.name, file.type) || /\.svgz?$/i.test(file.name)) {
+        document.getElementById("mediaServerShareStatus").textContent =
+            "Choose an audio, video, or non-SVG image file.";
+        return;
+    }
+    mediaShareBusy = true;
+    updateMediaShareButton();
+    let uploadCompleted = false;
+    try {
+        document.getElementById("mediaServerShareStatus").textContent =
+            `Uploading ${file.name} to this computer…`;
+        const uploaded = await readMediaServerResponse(await fetch("/api/uploads", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/octet-stream",
+                "X-File-Name": encodeURIComponent(file.name),
+            },
+            body: file,
+        }));
+        if (typeof uploaded.id !== "string") {
+            throw new Error("The local server did not return a saved file ID.");
+        }
+        uploadCompleted = true;
+        const created = await readMediaServerResponse(await fetch("/api/media/shares", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ uploadId: uploaded.id }),
+        }));
+        if (typeof created.url !== "string" || typeof created.token !== "string") {
+            throw new Error("The local server did not return a media share link.");
+        }
+        await refreshMediaServerShares();
+        document.getElementById("mediaServerShareStatus").textContent =
+            `${file.name} is ready to stream on your local network. Copy its link below.`;
+    } catch (error) {
+        console.error("Could not create the LAN media share.", error);
+        document.getElementById("mediaServerShareStatus").textContent = uploadCompleted
+            ? `The file was uploaded to the local shelf, but the share could not be created. ${error.message}`
+            : `Could not upload the selected media or create a share. ${error.message}`;
+    } finally {
+        mediaShareBusy = false;
+        updateMediaShareButton();
+    }
 });
 
 function queueFileUrl(rawUrl, requestedName = "") {
@@ -2798,9 +3875,11 @@ function queueFileUrl(rawUrl, requestedName = "") {
     }
 
     const parsedUrl = validation.parsedUrl;
-    const existingItem = downloadQueue.find((item) => item.url === parsedUrl.href);
+    const linkKey = normalizedLinkKey(parsedUrl.href);
+    const existingItem = downloadQueue.find((item) => normalizedLinkKey(item.url) === linkKey);
+    const previouslyOpened = downloadHistory.some((item) => normalizedLinkKey(item.url) === linkKey);
     if (existingItem) {
-        return { duplicate: true, item: existingItem };
+        return { duplicate: true, item: existingItem, previouslyOpened };
     }
     if (downloadQueue.length >= queueLimit) {
         return { error: `The queue is full. You can save up to ${queueLimit} links.` };
@@ -2820,7 +3899,18 @@ function queueFileUrl(rawUrl, requestedName = "") {
         downloadQueue = downloadQueue.filter((queued) => queued.id !== item.id);
         return { error: "Couldn't save the queue. Check your browser storage settings." };
     }
-    return { item };
+    renderActivityDashboard();
+    return { item, previouslyOpened };
+}
+
+function normalizedLinkKey(rawUrl) {
+    try {
+        const parsedUrl = new URL(rawUrl);
+        parsedUrl.hash = "";
+        return parsedUrl.href;
+    } catch {
+        return String(rawUrl).trim();
+    }
 }
 
 function updateQueueIndicators() {
@@ -2832,15 +3922,60 @@ function updateQueueIndicators() {
     document.getElementById("openNextQueue").disabled = downloadQueue.length === 0;
     document.getElementById("clearQueue").disabled = downloadQueue.length === 0;
     document.getElementById("queueEmpty").hidden = downloadQueue.length > 0;
+    document.getElementById("exportQueueLinks").disabled = downloadQueue.length === 0;
+    document.getElementById("selectAllQueue").disabled = downloadQueue.length === 0;
+    const selectedVisible = [...document.querySelectorAll("#queueList input[data-queue-select]")]
+        .filter((checkbox) => checkbox.checked).length;
+    document.getElementById("moveSelectedQueue").disabled = selectedVisible === 0;
+    document.getElementById("removeSelectedQueue").disabled = selectedVisible === 0;
+    renderActivityDashboard();
+}
+
+function queueProvider(item) {
+    const provider = cloudShareProvider(new URL(item.url));
+    return provider || "direct";
 }
 
 function renderQueue() {
     const queueList = document.getElementById("queueList");
     queueList.replaceChildren();
-    downloadQueue.forEach((item, index) => {
+    const query = document.getElementById("queueFilter").value.trim().toLowerCase();
+    const providerFilter = document.getElementById("queueProviderFilter").value;
+    const sort = document.getElementById("queueSort").value;
+    const visibleItems = downloadQueue.filter((item) => {
+        const provider = queueProvider(item);
+        return (!query || `${item.name} ${item.url}`.toLowerCase().includes(query)) &&
+            (providerFilter === "all" || provider === providerFilter);
+    });
+    visibleItems.sort((left, right) => {
+        if (sort === "name") {
+            return left.name.localeCompare(right.name);
+        }
+        if (sort === "provider") {
+            return queueProvider(left).localeCompare(queueProvider(right)) ||
+                left.name.localeCompare(right.name);
+        }
+        const leftDate = Date.parse(left.addedAt) || 0;
+        const rightDate = Date.parse(right.addedAt) || 0;
+        return sort === "added-newest" ? rightDate - leftDate : leftDate - rightDate;
+    });
+    visibleItems.forEach((item, index) => {
         const row = document.createElement("article");
         row.className = "queue-item";
 
+        const select = document.createElement("input");
+        select.type = "checkbox";
+        select.checked = selectedQueueIds.has(item.id);
+        select.dataset.queueSelect = item.id;
+        select.setAttribute("aria-label", `Select ${item.name}`);
+        select.addEventListener("change", () => {
+            if (select.checked) {
+                selectedQueueIds.add(item.id);
+            } else {
+                selectedQueueIds.delete(item.id);
+            }
+            updateQueueIndicators();
+        });
         const position = document.createElement("span");
         position.className = "queue-position";
         position.textContent = String(index + 1).padStart(2, "0");
@@ -2856,6 +3991,12 @@ function renderQueue() {
         addedAt.className = "queue-added";
         addedAt.textContent = `Added ${new Date(item.addedAt).toLocaleString()}`;
         details.append(name, url, addedAt);
+        if (downloadHistory.some((entry) => normalizedLinkKey(entry.url) === normalizedLinkKey(item.url))) {
+            const historyMatch = document.createElement("span");
+            historyMatch.className = "queue-history-match";
+            historyMatch.textContent = "Previously opened";
+            details.append(historyMatch);
+        }
 
         const actions = document.createElement("div");
         actions.className = "queue-item-actions";
@@ -2873,16 +4014,89 @@ function renderQueue() {
         remove.addEventListener("click", () => removeQueuedItem(item.id));
         actions.append(open, remove);
 
-        row.append(position, details, actions);
+        row.append(select, position, details, actions);
         queueList.append(row);
     });
+    document.getElementById("queueNoResults").hidden = downloadQueue.length === 0 || visibleItems.length > 0;
+    for (const selectedId of selectedQueueIds) {
+        if (!downloadQueue.some((item) => item.id === selectedId)) {
+            selectedQueueIds.delete(selectedId);
+        }
+    }
+    const visibleSelected = visibleItems.filter((item) => selectedQueueIds.has(item.id)).length;
+    const selectAll = document.getElementById("selectAllQueue");
+    selectAll.checked = visibleItems.length > 0 && visibleSelected === visibleItems.length;
+    selectAll.indeterminate = visibleSelected > 0 && visibleSelected < visibleItems.length;
     updateQueueIndicators();
 }
 
+function moveSelectedQueueToTop() {
+    const selected = downloadQueue.filter((item) => selectedQueueIds.has(item.id));
+    if (!selected.length) {
+        return;
+    }
+    const previousQueue = downloadQueue;
+    downloadQueue = [
+        ...selected,
+        ...downloadQueue.filter((item) => !selectedQueueIds.has(item.id)),
+    ];
+    if (!saveQueue()) {
+        downloadQueue = previousQueue;
+        setQueueStatus("Selected links could not be moved. Check your browser storage settings.");
+        renderQueue();
+        return;
+    }
+    renderQueue();
+    setQueueStatus(`${selected.length} selected ${selected.length === 1 ? "link" : "links"} moved to the top.`);
+}
+
+function removeSelectedQueueItems() {
+    const removed = downloadQueue.filter((item) => selectedQueueIds.has(item.id));
+    if (!removed.length) {
+        return;
+    }
+    const previousQueue = downloadQueue;
+    downloadQueue = downloadQueue.filter((item) => !selectedQueueIds.has(item.id));
+    if (!saveQueue()) {
+        downloadQueue = previousQueue;
+        setQueueStatus("Selected links could not be removed. Check your browser storage settings.");
+        renderQueue();
+        return;
+    }
+    removed.forEach((item) => selectedQueueIds.delete(item.id));
+    renderQueue();
+    setQueueStatus(`${removed.length} selected ${removed.length === 1 ? "link" : "links"} removed.`);
+}
+
+document.getElementById("queueFilter").addEventListener("input", renderQueue);
+document.getElementById("queueProviderFilter").addEventListener("change", renderQueue);
+document.getElementById("queueSort").addEventListener("change", renderQueue);
+document.getElementById("selectAllQueue").addEventListener("change", (event) => {
+    const visibleIds = [...document.querySelectorAll("#queueList input[data-queue-select]")]
+        .map((checkbox) => checkbox.dataset.queueSelect);
+    visibleIds.forEach((id) => {
+        if (event.currentTarget.checked) {
+            selectedQueueIds.add(id);
+        } else {
+            selectedQueueIds.delete(id);
+        }
+    });
+    renderQueue();
+});
+document.getElementById("moveSelectedQueue").addEventListener("click", moveSelectedQueueToTop);
+document.getElementById("removeSelectedQueue").addEventListener("click", removeSelectedQueueItems);
+
 function recordDownloadHistory(item) {
+    const previous = downloadHistory.find((entry) => normalizedLinkKey(entry.url) === normalizedLinkKey(item.url));
     downloadHistory = [
-        { url: item.url, name: item.name, date: new Date().toISOString() },
-        ...downloadHistory.filter((entry) => entry.url !== item.url),
+        {
+            url: item.url,
+            name: item.name,
+            date: new Date().toISOString(),
+            tags: previous?.tags || [],
+            note: previous?.note || "",
+        },
+        ...downloadHistory.filter((entry) => normalizedLinkKey(entry.url) !== normalizedLinkKey(item.url)),
     ].slice(0, historyLimit);
     const saved = saveHistory();
     renderHistory();
@@ -2910,6 +4124,7 @@ function openQueuedItem(id) {
     link.remove();
 
     downloadQueue = downloadQueue.filter((queued) => queued.id !== id);
+    selectedQueueIds.delete(id);
     const queueSaved = saveQueue();
     const historySaved = recordDownloadHistory(item);
     recordProgress(
@@ -2957,21 +4172,33 @@ function addLinksToQueue(entries, source, addedCounter = "") {
 
     let added = 0;
     let duplicates = 0;
+    let historyMatches = 0;
     let invalid = 0;
     const errors = [];
     entries.forEach((entry, index) => {
-        const url = typeof entry === "string" ? entry : entry.url;
-        const name = typeof entry === "string" ? "" : entry.name;
+        const url = typeof entry === "string"
+            ? entry
+            : entry && typeof entry.url === "string"
+                ? entry.url
+                : "";
+        const name = entry && typeof entry === "object" && typeof entry.name === "string"
+            ? entry.name
+            : "";
         const result = queueFileUrl(url, name);
         if (result.error) {
             invalid += 1;
             if (errors.length < 3) {
                 errors.push(`Item ${index + 1}: ${result.error}`);
             }
-        } else if (result.duplicate) {
-            duplicates += 1;
         } else {
-            added += 1;
+            if (result.previouslyOpened) {
+                historyMatches += 1;
+            }
+            if (result.duplicate) {
+                duplicates += 1;
+            } else {
+                added += 1;
+            }
         }
     });
 
@@ -2989,7 +4216,7 @@ function addLinksToQueue(entries, source, addedCounter = "") {
         );
     }
     renderQueue();
-    const summary = `${added} added, ${duplicates} duplicate${duplicates === 1 ? "" : "s"}, ${invalid} invalid.`;
+    const summary = `${added} added, ${duplicates} already queued, ${historyMatches} previously opened, ${invalid} invalid.`;
     return { message: errors.length ? `${summary} ${errors.join(" ")}` : summary };
 }
 
@@ -3004,8 +4231,8 @@ function addSingleToQueue() {
     }
     renderQueue();
     status.textContent = result.duplicate
-        ? `${result.item.name} is already in your queue.`
-        : `Added ${result.item.name} to your queue.`;
+        ? `${result.item.name} is already in your queue.${result.previouslyOpened ? " It is also in your recent history." : ""}`
+        : `Added ${result.item.name} to your queue.${result.previouslyOpened ? " This link appears in your recent history." : ""}`;
 }
 
 document.getElementById("addToQueue").addEventListener("click", addSingleToQueue);
@@ -3043,6 +4270,73 @@ document.getElementById("bulkQueueForm").addEventListener("submit", (event) => {
     const result = addLinksToQueue(lines, "from your batch");
     document.getElementById("bulkQueueUrls").value = "";
     setQueueStatus(result.message);
+});
+
+document.getElementById("exportQueueLinks").addEventListener("click", () => {
+    if (!downloadQueue.length) {
+        setQueueStatus("There are no queue links to export.");
+        return;
+    }
+    const format = document.getElementById("queueExportFormat").value;
+    const date = new Date().toISOString().slice(0, 10);
+    if (format === "json") {
+        downloadTextFile(
+            `surfyfriend-queue-${date}.json`,
+            JSON.stringify(downloadQueue.map(({ name, url }) => ({ name, url })), null, 2),
+            "application/json;charset=utf-8"
+        );
+    } else {
+        downloadTextFile(
+            `surfyfriend-queue-${date}.txt`,
+            downloadQueue.map((item) => `${item.name}\t${item.url}`).join("\r\n"),
+            "text/plain;charset=utf-8"
+        );
+    }
+    setQueueStatus(`Queue exported as ${format.toUpperCase()}.`);
+});
+
+document.getElementById("queueImportFile").addEventListener("change", async (event) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) {
+        return;
+    }
+    if (file.size > 1_000_000) {
+        setQueueStatus("Link-list files must be smaller than 1 MB.");
+        input.value = "";
+        return;
+    }
+    try {
+        const content = await file.text();
+        let entries;
+        if (file.name.toLowerCase().endsWith(".json") || file.type === "application/json") {
+            const parsed = JSON.parse(content);
+            const list = Array.isArray(parsed)
+                ? parsed
+                : parsed && typeof parsed === "object"
+                    ? parsed.links || parsed.items || parsed.queue
+                    : null;
+            if (!Array.isArray(list)) {
+                throw new Error("The JSON file must contain an array of links or link objects.");
+            }
+            entries = list;
+        } else {
+            entries = content.split(/\r?\n/).map((line) => {
+                const [name, ...urlParts] = line.split("\t");
+                return urlParts.length ? { name, url: urlParts.join("\t").trim() } : line.trim();
+            }).filter((entry) => typeof entry !== "string" || entry);
+        }
+        if (entries.length > queueLimit) {
+            throw new Error(`Link-list files can contain up to ${queueLimit} links.`);
+        }
+        const result = addLinksToQueue(entries, "from the imported file");
+        setQueueStatus(result.message);
+    } catch (error) {
+        console.error("Could not import queue links.", error);
+        setQueueStatus(`Could not import that link list. ${error.message}`);
+    } finally {
+        input.value = "";
+    }
 });
 
 async function readHtmlWithinLimit(response, limit) {
@@ -4033,6 +5327,9 @@ function setFullVersionAvailability(available) {
     notice.hidden = available;
     lockBadges.forEach((badge) => {
         badge.hidden = available;
+    });
+    document.querySelectorAll("[data-full-version-only]").forEach((feature) => {
+        feature.hidden = !available;
     });
     themeToggle.disabled = !available;
     document.querySelectorAll(".theme-option").forEach((button) => {

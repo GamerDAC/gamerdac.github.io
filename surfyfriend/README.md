@@ -14,6 +14,32 @@ The full Python version unlocks six color themes—Light, Dark, Ocean, Sunset, F
 
 Open **Media player** to play a direct HTTP or HTTPS audio/video file, preview an image, or choose a supported media file from this device. Device files are opened in the browser and are not uploaded. Remote media links must point directly to the media file; streaming-service pages, sign-in pages, and protected streams are not supported. Playback depends on the browser's supported formats and the source site's access rules.
 
+The media playlist saves remote links in this browser; files selected from this device stay in the playlist only for the current session. Audio and video advance when playback ends, and playlist items can be reordered.
+
+## Link library, history, and queue tools
+
+The full version adds an **Activity dashboard** with recent-link and workspace counts. **Link library** stores named collections and reusable download presets locally in this browser. Collections and presets can contain up to 50 supported links each; add a group to the queue when you want to use it. They are not account-synced.
+
+The **Download queue** can be searched, filtered by provider, sorted, and managed with batch selection. Links already in the queue are skipped; links found in recent history are added with a warning so they can be downloaded again. Import or export queue lists as text or JSON. Text exports include the filename followed by a tab and URL.
+
+**Download history** supports comma-separated tags and notes, which are included when exporting as CSV or JSON and are synced with the optional account. CSV exports escape spreadsheet formulas. History records links opened by SurfyFriend; it cannot confirm whether a download completed.
+
+## Local-network media server
+
+The optional media library uses files already saved in **My uploads**. Browse and search those files, add local titles, years, descriptions, tags, and JPEG/PNG/WebP cover art, then create a share link for selected media. Metadata and artwork stay on this computer; SurfyFriend does not query an external metadata service. Removing a saved file also removes its media details and revokes its share links.
+
+To share or stream files between devices, start SurfyFriend on the host computer with:
+
+```sh
+python3 server.py --lan
+```
+
+Open the app on that computer at <http://127.0.0.1:8765/> to manage shares. The generated player links work for devices that can reach the host's local-network address. Shares support HTTP byte ranges for seeking and remember playback position in each browser. Links are revocable and stop working when the server restarts. GitHub Pages cannot run this Python server.
+
+**LAN sharing is a deliberate security trade-off:** it uses unencrypted HTTP with no password, and the existing file shelf is accessible to devices on that network. Anyone with a media link can play that selected file while the server is running. Only enable `--lan` on a trusted private network, share non-sensitive files, and stop the server or revoke a link when finished. Do not expose its port to the public internet.
+
+If FFmpeg is already installed, the share player offers optional H.264/AAC-compatible transcoding for audio/video files. SurfyFriend never installs FFmpeg; install it separately if desired. Transcoded playback uses more CPU and does not support seeking. Native streaming remains available without FFmpeg. The media server does not fetch remote metadata or relay remote streams.
+
 ## More ways to find downloads
 
 The **Downloader** accepts direct file links and supported Google Drive, Dropbox, and OneDrive share links. When a URL looks like a webpage, SurfyFriend uses its Python backend to check the response and downloads HTML pages as `.html` files instead of opening them; this includes only the page source, not its images or linked files. Webpage downloads are limited to 5 MB, require a public HTTP(S) host, and need the local backend (they are unavailable from a static `file://` copy). Non-HTML responses are handed back to the browser's normal link behavior. A cloud share may open the provider's preview page; use its own Download option if shown. SurfyFriend does not bypass sign-in, sharing permissions, or protected streams.

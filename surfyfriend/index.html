@@ -47,6 +47,10 @@
           <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
           <span class="nav-count" id="queueCount">0</span>
         </a>
+        <a href="#library" class="nav-link" data-page="library" data-full-version-page>
+          <span aria-hidden="true">▤</span> Link library
+          <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+        </a>
         <a href="#uploads" class="nav-link" data-page="uploads" data-full-version-page>
           <span aria-hidden="true">☁</span> My uploads
           <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
@@ -336,6 +340,43 @@
             <span class="stat-caption">ready when you are</span>
           </article>
         </div>
+
+        <section
+          class="activity-dashboard"
+          data-full-version-only
+          hidden
+          aria-labelledby="activityDashboardTitle"
+        >
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">YOUR WORKSPACE, AT A GLANCE</p>
+              <h2 id="activityDashboardTitle">Activity dashboard</h2>
+            </div>
+          </div>
+          <div class="activity-dashboard-grid">
+            <article class="activity-card">
+              <span>Opened in the last 7 days</span>
+              <strong id="activityWeekCount">0</strong>
+            </article>
+            <article class="activity-card">
+              <span>Saved collections</span>
+              <strong id="activityCollectionCount">0</strong>
+            </article>
+            <article class="activity-card">
+              <span>Download presets</span>
+              <strong id="activityPresetCount">0</strong>
+            </article>
+            <article class="activity-card">
+              <span>Media playlist</span>
+              <strong id="activityPlaylistCount">0</strong>
+            </article>
+          </div>
+          <div class="activity-recent">
+            <h3>Recently opened</h3>
+            <ul id="activityRecentList"></ul>
+            <p id="activityRecentEmpty">Newly opened links will appear here.</p>
+          </div>
+        </section>
 
         <section
           class="progress-card"
@@ -946,6 +987,9 @@
                 Load media <span aria-hidden="true">→</span>
               </button>
             </div>
+            <button type="button" class="secondary-button" id="addMediaUrlToPlaylist">
+              Add link to playlist
+            </button>
             <label for="mediaType">Media type</label>
             <select id="mediaType">
               <option value="auto">Detect from the link</option>
@@ -968,6 +1012,9 @@
                 accept="audio/*,video/*,image/*"
               />
             </label>
+            <button type="button" class="secondary-button" id="addMediaFileToPlaylist" disabled>
+              Add selected file to playlist
+            </button>
             <p class="info-note">
               Your browser plays the media directly from its source. The source
               may require access or may prevent playback. SurfyFriend does not bypass
@@ -1005,6 +1052,66 @@
             ></p>
           </section>
         </div>
+        <section class="media-playlist-card" aria-labelledby="mediaPlaylistTitle">
+          <div class="media-playlist-heading">
+            <div>
+              <h3 id="mediaPlaylistTitle">Media playlist</h3>
+              <p>Queue media links and files for a listening or viewing session.</p>
+            </div>
+            <div class="media-playlist-actions">
+              <button type="button" class="secondary-button" id="previousMediaPlaylistItem" disabled>Previous</button>
+              <button type="button" class="secondary-button" id="nextMediaPlaylistItem" disabled>Next</button>
+              <button type="button" class="primary-button" id="playMediaPlaylist" disabled>Play playlist</button>
+            </div>
+          </div>
+          <div id="mediaPlaylistList" class="media-playlist-list"></div>
+          <p id="mediaPlaylistEmpty" class="empty-state">
+            Your playlist is empty. Add a media link or choose a file from this device.
+          </p>
+          <p id="mediaPlaylistStatus" class="status" role="status" aria-live="polite"></p>
+        </section>
+        <section class="media-server-card" aria-labelledby="mediaServerTitle">
+          <div>
+            <h3 id="mediaServerTitle">Share selected media on your Wi-Fi</h3>
+            <p id="mediaServerStatus" class="info-note">
+              Start the local server with <code>python3 server.py --lan</code>
+              to enable media sharing. GitHub Pages cannot run this server.
+            </p>
+          </div>
+          <label class="media-share-consent">
+            <input type="checkbox" id="mediaShareConsent" />
+            I understand anyone on my local network with the link can stream
+            this file over unencrypted HTTP until I revoke it or stop the server.
+          </label>
+          <button type="button" class="primary-button" id="createMediaShare" disabled>
+            Upload selected file and create share
+          </button>
+          <p id="mediaServerShareStatus" class="status" role="status" aria-live="polite"></p>
+          <div id="mediaServerShareList" class="media-server-share-list"></div>
+        </section>
+        <section class="media-library-card" aria-labelledby="mediaLibraryTitle">
+          <div class="media-playlist-heading">
+            <div>
+              <h3 id="mediaLibraryTitle">Local media library</h3>
+              <p>Browse media saved in My uploads. Details and cover art stay on this computer.</p>
+            </div>
+            <button type="button" class="secondary-button" id="refreshMediaLibrary">Refresh library</button>
+          </div>
+          <div class="media-library-toolbar">
+            <label for="mediaLibrarySearch">Search library</label>
+            <input type="search" id="mediaLibrarySearch" placeholder="Title, file name, or tag" />
+            <label for="mediaLibrarySort">Sort by</label>
+            <select id="mediaLibrarySort">
+              <option value="recent">Recently added</option>
+              <option value="title">Title (A–Z)</option>
+              <option value="year">Year</option>
+              <option value="size">File size</option>
+            </select>
+          </div>
+          <div id="mediaLibraryList" class="media-library-list"></div>
+          <p id="mediaLibraryEmpty" class="empty-state">No audio or video files are saved in My uploads yet.</p>
+          <p id="mediaLibraryStatus" class="status" role="status" aria-live="polite"></p>
+        </section>
         <p class="notice">
           <strong>Tip:</strong> If a link opens a webpage instead of media, find
           the source site's direct file link or use its official player. Browser
@@ -1045,7 +1152,38 @@
                 </button>
               </div>
             </div>
+            <div class="queue-toolbar">
+              <label>
+                Find in queue
+                <input type="search" id="queueFilter" placeholder="Search name or URL" />
+              </label>
+              <label>
+                Provider
+                <select id="queueProviderFilter">
+                  <option value="all">All providers</option>
+                  <option value="direct">Direct links</option>
+                  <option value="Google Drive">Google Drive</option>
+                  <option value="Dropbox">Dropbox</option>
+                  <option value="OneDrive">OneDrive</option>
+                </select>
+              </label>
+              <label>
+                Sort by
+                <select id="queueSort">
+                  <option value="added-oldest">Date added (oldest)</option>
+                  <option value="added-newest">Date added (newest)</option>
+                  <option value="name">Name (A–Z)</option>
+                  <option value="provider">Provider</option>
+                </select>
+              </label>
+            </div>
+            <div class="queue-batch-actions">
+              <label><input type="checkbox" id="selectAllQueue" /> Select visible</label>
+              <button type="button" class="secondary-button" id="moveSelectedQueue" disabled>Move selected to top</button>
+              <button type="button" class="secondary-button danger-button" id="removeSelectedQueue" disabled>Remove selected</button>
+            </div>
             <div class="queue-list" id="queueList"></div>
+            <p id="queueNoResults" class="empty-state" hidden>No queue links match these filters.</p>
             <div class="queue-empty" id="queueEmpty">
               <span aria-hidden="true">☷</span>
               <strong>Your queue is clear</strong>
@@ -1090,7 +1228,60 @@
               Opening is always manual and one link at a time. Cloud shares may
               open their provider page and still follow its access rules.
             </p>
+            <div class="queue-transfer-controls">
+              <label for="queueImportFile">Import links (.txt or .json)</label>
+              <input type="file" id="queueImportFile" accept=".txt,.json,text/plain,application/json" />
+              <label for="queueExportFormat">Export format</label>
+              <select id="queueExportFormat">
+                <option value="txt">Text (.txt)</option>
+                <option value="json">JSON (.json)</option>
+              </select>
+              <button type="button" class="secondary-button" id="exportQueueLinks" disabled>Export queue</button>
+            </div>
           </form>
+        </div>
+      </section>
+
+      <section class="page-section" id="library" data-section="library" hidden>
+        <div class="section-intro">
+          <p class="eyebrow">KEEP YOUR FAVORITES CLOSE</p>
+          <h2>Your link library</h2>
+          <p>
+            Collections keep related links together. Presets save a reusable batch
+            for adding to the queue again. This library stays in this browser.
+          </p>
+        </div>
+        <div class="library-layout">
+          <form class="library-form-card" id="collectionForm">
+            <h3>Create a link collection</h3>
+            <label for="collectionName">Collection name</label>
+            <input id="collectionName" maxlength="60" required placeholder="e.g. Reference files" />
+            <label for="collectionUrls">HTTP or HTTPS links, one per line</label>
+            <textarea id="collectionUrls" rows="5" required placeholder="https://example.com/guide.pdf"></textarea>
+            <button type="submit" class="primary-button">Save collection</button>
+            <p id="collectionStatus" class="status" role="status" aria-live="polite"></p>
+          </form>
+          <form class="library-form-card" id="presetForm">
+            <h3>Save a download preset</h3>
+            <label for="presetName">Preset name</label>
+            <input id="presetName" maxlength="60" required placeholder="e.g. Weekly reports" />
+            <label for="presetUrls">Reusable download links, one per line</label>
+            <textarea id="presetUrls" rows="5" required placeholder="https://example.com/report.csv"></textarea>
+            <button type="submit" class="primary-button">Save preset</button>
+            <p id="presetStatus" class="status" role="status" aria-live="polite"></p>
+          </form>
+        </div>
+        <div class="library-lists">
+          <section class="library-list-card" aria-labelledby="collectionsHeading">
+            <h3 id="collectionsHeading">Saved collections</h3>
+            <div id="collectionList" class="library-list"></div>
+            <p id="collectionEmpty" class="empty-state">No collections saved yet.</p>
+          </section>
+          <section class="library-list-card" aria-labelledby="presetsHeading">
+            <h3 id="presetsHeading">Download presets</h3>
+            <div id="presetList" class="library-list"></div>
+            <p id="presetEmpty" class="empty-state">No presets saved yet.</p>
+          </section>
         </div>
       </section>
 
@@ -1311,9 +1502,15 @@
               Links you opened from this browser are kept here for convenience.
             </p>
           </div>
-          <button type="button" class="secondary-button" id="clearHistory">
-            Clear history
-          </button>
+          <div class="history-actions">
+            <label for="historyExportFormat">Export format</label>
+            <select id="historyExportFormat">
+              <option value="csv">CSV</option>
+              <option value="json">JSON</option>
+            </select>
+            <button type="button" class="secondary-button" id="exportHistory">Export history</button>
+            <button type="button" class="secondary-button" id="clearHistory">Clear history</button>
+          </div>
         </div>
         <div id="historyList" class="history-list"></div>
         <p id="historyEmpty" class="empty-state" hidden>

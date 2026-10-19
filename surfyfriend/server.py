@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Serve SurfyFriend, its optional accounts, and local uploads."""
+"""Serve SurfyFriend, its optional accounts, local uploads, and LAN media shares."""
 
 from __future__ import annotations
 
 import json
 import base64
+import binascii
 import hashlib
+import html
 import hmac
 import http.client
 import ipaddress
@@ -16,6 +18,7 @@ import secrets
 import socket
 import shutil
 import sqlite3
+import subprocess
 import tempfile
 import threading
 import unicodedata
@@ -37,6 +40,10 @@ from uuid import uuid4
 HOST = os.environ.get("DLTIME_HOST", "127.0.0.1")
 PORT = int(os.environ.get("DLTIME_PORT", "8765"))
 MAX_UPLOAD_BYTES = 500 * 1024 * 1024
+MAX_MEDIA_SHARES = 50
+MAX_MEDIA_METADATA_BODY_BYTES = 3_000_000
+MAX_MEDIA_ARTWORK_BYTES = 2 * 1024 * 1024
+FFMPEG_STREAM_LIMIT = threading.BoundedSemaphore(2)
 MAX_ACCOUNT_BODY_BYTES = 25_000_000
 MAX_SECURITY_CHECK_BODY_BYTES = 4_096
 MAX_WEBPAGE_DOWNLOAD_BYTES = 5 * 1024 * 1024
@@ -55,6 +62,10 @@ PUBLIC_ORIGIN = os.environ.get("DLTIME_PUBLIC_ORIGIN", "").rstrip("/")
 PUBLIC_ORIGIN_PARTS = urlsplit(PUBLIC_ORIGIN) if PUBLIC_ORIGIN else None
 UPLOAD_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 UPLOAD_FILENAME_PATTERN = re.compile(r"^([0-9a-f]{32})--(.+)$")
+MEDIA_SHARE_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{40,64}$")
+MEDIA_ARTWORK_DATA_PATTERN = re.compile(
+    r"^data:image/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$"
+)
 LOOPBACK_HOST_HEADERS = {f"{HOST}:{PORT}", f"localhost:{PORT}"}
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]{3,30}$")
 VIRUSTOTAL_API_URL = "https://www.virustotal.com/api/v3"
@@ -203,7 +214,7 @@ def validate_account_data(value: object) -> Optional[dict[str, object]]:
         queue_ids.add(item_id)
         queue.append({"id": item_id, "url": item_url, "name": name, "addedAt": added_at})
 
-    history: list[dict[str, str]] = []
+    history: list[dict[str, object]] = []
     history_urls: set[str] = set()
     for item in raw_history:
         if not isinstance(item, dict):
@@ -211,6 +222,8 @@ def validate_account_data(value: object) -> Optional[dict[str, object]]:
         item_url = validate_account_url(item.get("url"))
         name = item.get("name")
         date = item.get("date")
+        tags = item.get("tags", [])
+        note = item.get("note", "")
         if (
             item_url is None
             or item_url in history_urls
@@ -219,10 +232,22 @@ def validate_account_data(value: object) -> Optional[dict[str, object]]:
             or len(name) > 180
             or not isinstance(date, str)
             or len(date) > 64
+            or not isinstance(tags, list)
+            or len(tags) > 10
+            or not all(isinstance(tag, str) and 1 <= len(tag.strip()) <= 30 for tag in tags)
+            or len({tag.strip().casefold() for tag in tags}) != len(tags)
+            or not isinstance(note, str)
+            or len(note) > 500
         ):
             return None
         history_urls.add(item_url)
-        history.append({"url": item_url, "name": name, "date": date})
+        history.append({
+            "url": item_url,
+            "name": name,
+            "date": date,
+            "tags": [tag.strip() for tag in tags],
+            "note": note,
+        })
     return {"progress": progress, "queue": queue, "history": history}
 
 
@@ -574,6 +599,11 @@ def parse_virustotal_report(payload: dict[str, object]) -> dict[str, object]:
 
 class DltimeHandler(BaseHTTPRequestHandler):
     server_version = "SurfyFriend/1.1"
+
+    def log_message(self, format: str, *args: object) -> None:
+        if self.path.startswith("/media/") and args and isinstance(args[0], str):
+            args = (args[0].replace(self.path, "/media/[share token redacted]"), *args[1:])
+        super().log_message(format, *args)
 
     def _send_json(self, status: int, payload: object) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -1153,6 +1183,633 @@ class DltimeHandler(BaseHTTPRequestHandler):
                 return path, filename
         return None
 
+    def _is_loopback_client(self) -> bool:
+        try:
+            return ipaddress.ip_address(self.client_address[0]).is_loopback
+        except ValueError:
+            return False
+
+    def _require_media_share_manager(self) -> bool:
+        if not self._is_loopback_client():
+            self.close_connection = True
+            self._send_error_json(403, "Manage media shares from this computer using its local SurfyFriend address.")
+            return False
+        if PUBLIC_ORIGIN or not self.server.network_url:
+            self._send_error_json(403, "Start SurfyFriend with --lan before creating or managing LAN media shares.")
+            return False
+        return True
+
+    @staticmethod
+    def _media_content_type(filename: str) -> Optional[str]:
+        content_type = mimetypes.guess_type(filename)[0] or ""
+        if not content_type.startswith(("audio/", "video/", "image/")):
+            return None
+        if content_type == "image/svg+xml":
+            return None
+        return content_type
+
+    @staticmethod
+    def _media_metadata_root() -> Path:
+        return UPLOAD_ROOT / ".media-library"
+
+    def _default_media_metadata(self, filename: str) -> dict[str, object]:
+        stem = Path(filename).stem
+        year_match = re.search(r"(?<!\d)(18\d{2}|19\d{2}|20\d{2}|2100)(?!\d)", stem)
+        title = re.sub(r"[._]+", " ", stem).strip() or filename
+        return {
+            "title": title[:100],
+            "summary": "",
+            "year": int(year_match.group(1)) if year_match else None,
+            "tags": [],
+            "artwork": "",
+        }
+
+    def _read_media_metadata(self, upload_id: str, filename: str) -> dict[str, object]:
+        root = self._media_metadata_root()
+        path = root / f"{upload_id}.json"
+        if root.is_symlink() or path.is_symlink() or not path.is_file():
+            return self._default_media_metadata(filename)
+        try:
+            metadata = json.loads(path.read_text("utf-8"))
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as error:
+            self.log_error("Could not read media metadata for %s: %s", upload_id, error)
+            return self._default_media_metadata(filename)
+        if not isinstance(metadata, dict):
+            self.log_error("Stored media metadata for %s is not an object.", upload_id)
+            return self._default_media_metadata(filename)
+        title = metadata.get("title")
+        summary = metadata.get("summary")
+        year = metadata.get("year")
+        tags = metadata.get("tags")
+        artwork = metadata.get("artwork")
+        if (
+            not isinstance(title, str)
+            or not title.strip()
+            or len(title) > 100
+            or not isinstance(summary, str)
+            or len(summary) > 500
+            or (year is not None and (type(year) is not int or not 1888 <= year <= 2100))
+            or not isinstance(tags, list)
+            or len(tags) > 10
+            or not all(isinstance(tag, str) and 1 <= len(tag.strip()) <= 30 for tag in tags)
+            or not isinstance(artwork, str)
+            or (artwork and not re.fullmatch(rf"{upload_id}--poster\.(jpg|png|webp)", artwork))
+        ):
+            self.log_error("Stored media metadata for %s has invalid fields.", upload_id)
+            return self._default_media_metadata(filename)
+        return {
+            "title": title.strip(),
+            "summary": summary,
+            "year": year,
+            "tags": tags,
+            "artwork": artwork,
+        }
+
+    def _list_media_library(self) -> None:
+        if PUBLIC_ORIGIN:
+            self._send_error_json(403, "The local media library is disabled on public deployments.")
+            return
+        try:
+            files = []
+            for path, upload_id, filename in self._upload_files():
+                content_type = self._media_content_type(filename)
+                if not content_type:
+                    continue
+                stat = path.stat()
+                metadata = self._read_media_metadata(upload_id, filename)
+                files.append({
+                    "id": upload_id,
+                    "name": filename,
+                    "bytes": stat.st_size,
+                    "modifiedAt": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+                    "mediaType": content_type,
+                    "metadata": {key: value for key, value in metadata.items() if key != "artwork"},
+                    "artworkUrl": f"/api/media/library/{upload_id}/artwork" if metadata["artwork"] else "",
+                })
+        except OSError as error:
+            self._send_error_json(500, f"Could not read the local media library: {error.strerror or 'file system error'}.")
+            return
+        self._send_json(200, {"items": files, "ffmpegAvailable": shutil.which("ffmpeg") is not None})
+
+    def _save_media_metadata(self, upload_id: str) -> None:
+        if PUBLIC_ORIGIN:
+            self._send_error_json(403, "The local media library is disabled on public deployments.")
+            return
+        if not self._is_loopback_client():
+            self.close_connection = True
+            self._send_error_json(403, "Edit the local media library from this computer.")
+            return
+        upload = self._find_upload(upload_id)
+        if not upload or not self._media_content_type(upload[1]):
+            self._send_error_json(404, "That local media file was not found.")
+            return
+        payload = self._read_json_body(max_bytes=MAX_MEDIA_METADATA_BODY_BYTES)
+        if payload is None:
+            return
+        title = payload.get("title")
+        summary = payload.get("summary", "")
+        year = payload.get("year")
+        tags = payload.get("tags", [])
+        if (
+            not isinstance(title, str)
+            or not title.strip()
+            or len(title.strip()) > 100
+            or not isinstance(summary, str)
+            or len(summary) > 500
+            or (year is not None and (type(year) is not int or not 1888 <= year <= 2100))
+            or not isinstance(tags, list)
+            or len(tags) > 10
+            or not all(isinstance(tag, str) and 1 <= len(tag.strip()) <= 30 for tag in tags)
+            or len({tag.strip().casefold() for tag in tags}) != len(tags)
+        ):
+            self._send_error_json(400, "Use a title up to 100 characters, a description up to 500 characters, a valid year, and up to 10 unique tags.")
+            return
+
+        root = self._media_metadata_root()
+        metadata_path = root / f"{upload_id}.json"
+        previous = self._read_media_metadata(upload_id, upload[1])
+        artwork_name = previous["artwork"]
+        artwork_value = payload.get("artwork", "keep")
+        new_artwork_path: Optional[Path] = None
+        if artwork_value != "keep":
+            if artwork_value is None or artwork_value == "":
+                artwork_name = ""
+            elif isinstance(artwork_value, str):
+                match = MEDIA_ARTWORK_DATA_PATTERN.fullmatch(artwork_value)
+                if not match:
+                    self._send_error_json(400, "Cover art must be a JPEG, PNG, or WebP data URL.")
+                    return
+                image_type, encoded_image = match.groups()
+                try:
+                    image_bytes = base64.b64decode(encoded_image, validate=True)
+                except (binascii.Error, ValueError):
+                    self._send_error_json(400, "The cover art data is invalid.")
+                    return
+                if not image_bytes or len(image_bytes) > MAX_MEDIA_ARTWORK_BYTES:
+                    self._send_error_json(413, "Cover art must be smaller than 2 MB.")
+                    return
+                signatures = {
+                    "jpeg": image_bytes.startswith(b"\xff\xd8\xff"),
+                    "png": image_bytes.startswith(b"\x89PNG\r\n\x1a\n"),
+                    "webp": image_bytes.startswith(b"RIFF") and image_bytes[8:12] == b"WEBP",
+                }
+                if not signatures[image_type]:
+                    self._send_error_json(400, "The cover art does not match its declared image format.")
+                    return
+                extension = {"jpeg": "jpg", "png": "png", "webp": "webp"}[image_type]
+                artwork_name = f"{upload_id}--poster.{extension}"
+                try:
+                    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+                    if root.is_symlink():
+                        raise OSError("The media metadata directory cannot be a symbolic link.")
+                    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{upload_id}-", suffix=".part", dir=root)
+                    new_artwork_path = Path(temporary_name)
+                    with os.fdopen(descriptor, "wb") as output:
+                        os.chmod(new_artwork_path, 0o600)
+                        output.write(image_bytes)
+                    new_artwork_path.replace(root / artwork_name)
+                    new_artwork_path = None
+                except OSError as error:
+                    if new_artwork_path:
+                        new_artwork_path.unlink(missing_ok=True)
+                    self._send_error_json(500, f"Could not save cover art: {error.strerror or str(error)}.")
+                    return
+            else:
+                self._send_error_json(400, "The cover art data is invalid.")
+                return
+
+        metadata = {
+            "title": title.strip(),
+            "summary": summary.strip(),
+            "year": year,
+            "tags": list(dict.fromkeys(tag.strip() for tag in tags)),
+            "artwork": artwork_name,
+        }
+        temporary_metadata: Optional[Path] = None
+        try:
+            root.mkdir(mode=0o700, parents=True, exist_ok=True)
+            if root.is_symlink():
+                raise OSError("The media metadata directory cannot be a symbolic link.")
+            descriptor, temporary_name = tempfile.mkstemp(prefix=f".{upload_id}-", suffix=".part", dir=root)
+            temporary_metadata = Path(temporary_name)
+            with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+                os.chmod(temporary_metadata, 0o600)
+                json.dump(metadata, output, ensure_ascii=False)
+            temporary_metadata.replace(metadata_path)
+            temporary_metadata = None
+        except OSError as error:
+            if temporary_metadata:
+                temporary_metadata.unlink(missing_ok=True)
+            self._send_error_json(500, f"Could not save media details: {error.strerror or str(error)}.")
+            return
+        if previous["artwork"] and previous["artwork"] != artwork_name:
+            old_artwork = root / str(previous["artwork"])
+            if old_artwork.parent == root and not old_artwork.is_symlink():
+                old_artwork.unlink(missing_ok=True)
+        self._send_json(200, {"saved": True})
+
+    def _serve_media_artwork(self, upload_id: str) -> None:
+        upload = self._find_upload(upload_id)
+        if not upload:
+            self._send_error_json(404, "That media file was not found.")
+            return
+        metadata = self._read_media_metadata(upload_id, upload[1])
+        artwork_name = metadata["artwork"]
+        if not artwork_name:
+            self._send_error_json(404, "No cover art is saved for that media file.")
+            return
+        root = self._media_metadata_root()
+        artwork_path = root / str(artwork_name)
+        try:
+            if root.is_symlink() or artwork_path.is_symlink():
+                raise OSError("Cover art path is not safe.")
+            content_type = mimetypes.guess_type(str(artwork_path))[0] or "application/octet-stream"
+            body = artwork_path.read_bytes()
+        except OSError:
+            self._send_error_json(404, "The saved cover art could not be read.")
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _list_media_shares(self) -> None:
+        if not self._require_media_share_manager():
+            return
+        with self.server.media_share_lock:
+            shares = list(self.server.media_shares.items())
+        files = []
+        for token, upload_id in shares:
+            upload = self._find_upload(upload_id)
+            if not upload or not self._media_content_type(upload[1]):
+                continue
+            files.append({
+                "token": token,
+                "name": upload[1],
+                "url": f"{self.server.network_url.rstrip('/')}/media/{token}",
+            })
+        self._send_json(200, files)
+
+    def _create_media_share(self) -> None:
+        if not self._require_media_share_manager():
+            return
+        payload = self._read_json_body(max_bytes=4_096)
+        if payload is None:
+            return
+        upload_id = payload.get("uploadId")
+        if not isinstance(upload_id, str) or not UPLOAD_ID_PATTERN.fullmatch(upload_id):
+            self._send_error_json(400, "Choose a saved media file to share.")
+            return
+        upload = self._find_upload(upload_id)
+        if not upload:
+            self._send_error_json(404, "That saved media file was not found.")
+            return
+        if not self._media_content_type(upload[1]):
+            self._send_error_json(415, "Only audio, video, and non-SVG image files can be shared.")
+            return
+        token = secrets.token_urlsafe(32)
+        with self.server.media_share_lock:
+            if len(self.server.media_shares) >= MAX_MEDIA_SHARES:
+                self._send_error_json(409, f"You can have up to {MAX_MEDIA_SHARES} active media shares.")
+                return
+            self.server.media_shares[token] = upload_id
+        self._send_json(201, {
+            "token": token,
+            "name": upload[1],
+            "url": f"{self.server.network_url.rstrip('/')}/media/{token}",
+        })
+
+    def _revoke_media_share(self, token: str) -> None:
+        if not self._require_media_share_manager():
+            return
+        if not MEDIA_SHARE_TOKEN_PATTERN.fullmatch(token):
+            self._send_error_json(404, "That media share was not found.")
+            return
+        with self.server.media_share_lock:
+            removed = self.server.media_shares.pop(token, None)
+        if removed is None:
+            self._send_error_json(404, "That media share was not found.")
+            return
+        self._send_json(200, {"revoked": True})
+
+    def _remove_media_metadata(self, upload_id: str, filename: str) -> None:
+        root = self._media_metadata_root()
+        if root.is_symlink():
+            self.log_error("Could not remove media metadata from a symbolic-link directory.")
+            return
+        metadata = self._read_media_metadata(upload_id, filename)
+        try:
+            (root / f"{upload_id}.json").unlink(missing_ok=True)
+            artwork_name = metadata["artwork"]
+            if artwork_name:
+                artwork_path = root / str(artwork_name)
+                if artwork_path.parent == root and not artwork_path.is_symlink():
+                    artwork_path.unlink(missing_ok=True)
+        except OSError as error:
+            self.log_error("Could not remove media metadata for %s: %s", upload_id, error)
+
+    def _media_share_upload(self, token: str) -> Optional[tuple[str, Path, str, str]]:
+        if (
+            not self.server.network_enabled
+            or PUBLIC_ORIGIN
+            or not MEDIA_SHARE_TOKEN_PATTERN.fullmatch(token)
+        ):
+            return None
+        with self.server.media_share_lock:
+            upload_id = self.server.media_shares.get(token)
+        upload = self._find_upload(upload_id) if upload_id else None
+        if not upload:
+            return None
+        path, filename = upload
+        content_type = self._media_content_type(filename)
+        if not content_type:
+            return None
+        return upload_id, path, filename, content_type
+
+    def _serve_media_player(self, token: str) -> None:
+        media = self._media_share_upload(token)
+        if not media:
+            self._send_error_json(404, "That media share was not found or has expired.")
+            return
+        upload_id, _, filename, content_type = media
+        metadata = self._read_media_metadata(upload_id, filename)
+        title = html.escape(str(metadata["title"]))
+        summary = html.escape(str(metadata["summary"]))
+        year = f'<span>{metadata["year"]}</span>' if metadata["year"] else ""
+        tags = "".join(
+            f"<span>{html.escape(tag)}</span>"
+            for tag in metadata["tags"]
+        )
+        artwork = (
+            f'<img class="artwork" src="/api/media/library/{upload_id}/artwork" alt="">'
+            if metadata["artwork"]
+            else ""
+        )
+        stream_url = f"/media/{token}/stream"
+        if content_type.startswith("video/"):
+            player = (
+                f'<video id="player" controls playsinline preload="metadata" '
+                f'poster="/api/media/library/{upload_id}/artwork" src="{stream_url}"></video>'
+            )
+        elif content_type.startswith("audio/"):
+            player = f'<audio id="player" controls preload="metadata" src="{stream_url}"></audio>'
+        else:
+            player = f'<img class="media-image" src="{stream_url}" alt="{title}">'
+        ffmpeg_button = (
+            '<button id="transcode" type="button">Try FFmpeg-compatible playback</button>'
+            if shutil.which("ffmpeg") and content_type.startswith(("audio/", "video/"))
+            else ""
+        )
+        page = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>{title} · SurfyFriend</title>
+  <style>
+    :root {{ color-scheme: dark; font: 16px system-ui, sans-serif; background: #11131a; color: #f6f7fb; }}
+    body {{ max-width: 1000px; margin: 0 auto; padding: 28px; }}
+    main {{ display: grid; gap: 18px; }}
+    .heading {{ display: flex; align-items: center; gap: 20px; }}
+    .artwork {{ width: 100px; height: 140px; object-fit: cover; border-radius: 10px; }}
+    h1 {{ margin: 0 0 8px; font-size: clamp(24px, 5vw, 42px); }}
+    p, .meta {{ color: #b9becb; line-height: 1.6; }}
+    .tags {{ display: flex; flex-wrap: wrap; gap: 7px; }}
+    .tags span {{ padding: 5px 9px; border-radius: 999px; background: #282c39; }}
+    video {{ width: 100%; max-height: 72vh; background: #000; }}
+    audio {{ width: 100%; }}
+    .media-image {{ display: block; max-width: 100%; max-height: 72vh; margin: auto; }}
+    button, a {{ color: #c2b5ff; }}
+    button {{ padding: 10px 14px; border: 1px solid #49445e; border-radius: 8px; background: #252231; cursor: pointer; }}
+    .controls {{ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }}
+    #status {{ min-height: 1.5em; color: #b9becb; }}
+    @media (max-width: 520px) {{ body {{ padding: 16px; }} .artwork {{ width: 70px; height: 100px; }} }}
+  </style>
+</head>
+<body data-token="{token}">
+  <main>
+    <header class="heading">{artwork}<div><h1>{title}</h1><div class="meta">{year}<span>{html.escape(filename)}</span></div></div></header>
+    <p>{summary}</p>
+    <div class="tags">{tags}</div>
+    {player}
+    <div class="controls">{ffmpeg_button}<a href="{stream_url}">Open media stream</a></div>
+    <p id="status" role="status" aria-live="polite"></p>
+  </main>
+  <script>
+    const token = document.body.dataset.token;
+    const player = document.getElementById("player");
+    const status = document.getElementById("status");
+    if (player) {{
+      const key = `surfyfriend.media.position.${{token}}`;
+      player.addEventListener("loadedmetadata", () => {{
+        try {{
+          const saved = Number(localStorage.getItem(key) || 0);
+          if (saved > 0 && saved < player.duration - 5) player.currentTime = saved;
+        }} catch (error) {{ console.error("Could not restore media position.", error); }}
+      }});
+      player.addEventListener("timeupdate", () => {{
+        if (player.currentTime < 5 || player.ended) return;
+        try {{ localStorage.setItem(key, String(player.currentTime)); }}
+        catch (error) {{ console.error("Could not save media position.", error); }}
+      }});
+      player.addEventListener("ended", () => {{
+        try {{ localStorage.removeItem(key); }}
+        catch (error) {{ console.error("Could not clear media position.", error); }}
+      }});
+      player.addEventListener("error", () => {{
+        status.textContent = "Playback failed. Check that this format is supported or try FFmpeg-compatible playback.";
+      }});
+    }}
+    const transcode = document.getElementById("transcode");
+    if (transcode && player) {{
+      transcode.addEventListener("click", () => {{
+        status.textContent = "Transcoding with FFmpeg. Seeking is unavailable during transcoded playback.";
+        player.src = `/media/${{encodeURIComponent(token)}}/stream?transcode=1`;
+        player.load();
+      }});
+    }}
+  </script>
+</body>
+</html>""".encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(page)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'none'; media-src 'self'; img-src 'self'; "
+            "style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'",
+        )
+        self.end_headers()
+        self.wfile.write(page)
+
+    def _serve_transcoded_media(self, path: Path, content_type: str) -> None:
+        ffmpeg_path = shutil.which("ffmpeg")
+        if not ffmpeg_path:
+            self._send_error_json(503, "FFmpeg is not installed. Install it separately to use compatible playback.")
+            return
+        if not FFMPEG_STREAM_LIMIT.acquire(blocking=False):
+            self._send_error_json(429, "The media server is busy transcoding other files. Try again shortly.")
+            return
+        if content_type.startswith("audio/"):
+            output_type = "audio/mp4"
+            stream_args = ["-vn", "-c:a", "aac", "-b:a", "160k"]
+        else:
+            output_type = "video/mp4"
+            stream_args = [
+                "-map", "0:v:0?", "-map", "0:a:0?",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+                "-c:a", "aac", "-b:a", "160k",
+            ]
+        command = [
+            ffmpeg_path, "-nostdin", "-hide_banner", "-loglevel", "error",
+            "-i", str(path), *stream_args,
+            "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+            "-f", "mp4", "pipe:1",
+        ]
+        try:
+            with tempfile.TemporaryFile() as error_output:
+                process = subprocess.Popen(
+                    command,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=error_output,
+                )
+                self.close_connection = True
+                self.send_response(200)
+                self.send_header("Content-Type", output_type)
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Referrer-Policy", "no-referrer")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Connection", "close")
+                self.end_headers()
+                try:
+                    if process.stdout:
+                        while True:
+                            chunk = process.stdout.read1(1024 * 1024)
+                            if not chunk:
+                                break
+                            self.wfile.write(chunk)
+                    return_code = process.wait(timeout=15)
+                except (BrokenPipeError, ConnectionResetError):
+                    if process.poll() is None:
+                        process.terminate()
+                    return_code = process.wait(timeout=5)
+                except OSError as error:
+                    if process.poll() is None:
+                        process.terminate()
+                    process.wait(timeout=5)
+                    self.log_error("Media client disconnected during FFmpeg streaming: %s", error)
+                    return_code = 0
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    return_code = process.wait(timeout=5)
+                if return_code:
+                    error_output.seek(0)
+                    detail = error_output.read(2_048).decode("utf-8", errors="replace").strip()
+                    self.log_error("FFmpeg exited with status %s: %s", return_code, detail or "no diagnostic output")
+        except OSError as error:
+            self._send_error_json(500, f"Could not start FFmpeg: {error.strerror or str(error)}.")
+        finally:
+            FFMPEG_STREAM_LIMIT.release()
+
+    def _serve_media_stream(self, token: str, transcode: bool = False) -> None:
+        media = self._media_share_upload(token)
+        if not media:
+            self._send_error_json(404, "That media share was not found or has expired.")
+            return
+        _, path, filename, content_type = media
+        if transcode:
+            if not content_type.startswith(("audio/", "video/")):
+                self._send_error_json(415, "FFmpeg-compatible playback is only available for audio and video.")
+                return
+            self._serve_transcoded_media(path, content_type)
+            return
+
+        try:
+            source = path.open("rb")
+            size = path.stat().st_size
+        except OSError as error:
+            self._send_error_json(404, f"Could not open the shared media: {error.strerror or 'file system error'}.")
+            return
+
+        start = 0
+        end = size - 1
+        status = 200
+        range_header = self.headers.get("Range")
+        if range_header:
+            match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header.strip())
+            if not match or size == 0 or (not match.group(1) and not match.group(2)):
+                source.close()
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.send_header("Content-Length", "0")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                return
+            first, last = match.groups()
+            if first:
+                start = int(first)
+                end = int(last) if last else size - 1
+            else:
+                suffix_length = int(last)
+                if suffix_length == 0:
+                    source.close()
+                    self.send_response(416)
+                    self.send_header("Content-Range", f"bytes */{size}")
+                    self.send_header("Content-Length", "0")
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    return
+                start = max(0, size - suffix_length)
+            if start >= size or end < start:
+                source.close()
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.send_header("Content-Length", "0")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                return
+            end = min(end, size - 1)
+            status = 206
+
+        content_length = end - start + 1
+        fallback_name = filename.encode("ascii", "replace").decode("ascii").replace('"', "_")
+        disposition = (
+            f'inline; filename="{fallback_name}"; '
+            f"filename*=UTF-8''{quote(filename, safe='')}"
+        )
+        try:
+            source.seek(start)
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(content_length))
+            self.send_header("Content-Disposition", disposition)
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            if status == 206:
+                self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            self.end_headers()
+            remaining = content_length
+            while remaining:
+                chunk = source.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
+        except OSError as error:
+            self.log_error("Could not stream shared media: %s", error)
+        finally:
+            source.close()
+
     def do_GET(self) -> None:
         if not self._is_local_request():
             return
@@ -1172,11 +1829,36 @@ class DltimeHandler(BaseHTTPRequestHandler):
                 return
             self._list_uploads()
             return
+        if request.path == "/api/media/library":
+            self._list_media_library()
+            return
+        artwork_match = re.fullmatch(r"/api/media/library/([0-9a-f]{32})/artwork", request.path)
+        if artwork_match:
+            self._serve_media_artwork(artwork_match.group(1))
+            return
+        if request.path == "/api/media/shares":
+            self._list_media_shares()
+            return
+        if request.path.startswith("/media/"):
+            media_path = request.path.removeprefix("/media/")
+            parts = media_path.split("/")
+            if len(parts) == 1:
+                self._serve_media_player(parts[0])
+            elif len(parts) == 2 and parts[1] == "stream":
+                query = urllib.parse.parse_qs(request.query, keep_blank_values=True)
+                if query and query != {"transcode": ["1"]}:
+                    self._send_error_json(400, "The media stream options are invalid.")
+                    return
+                self._serve_media_stream(parts[0], transcode=query == {"transcode": ["1"]})
+            else:
+                self._send_error_json(404, "That media share was not found.")
+            return
         if request.path == "/api/status":
             self._send_json(200, {
                 "networkEnabled": self.server.network_enabled,
                 "networkUrl": self.server.network_url,
                 "uploadsEnabled": not bool(PUBLIC_ORIGIN),
+                "ffmpegAvailable": shutil.which("ffmpeg") is not None,
             })
             return
         if request.path.startswith("/api/uploads/"):
@@ -1206,6 +1888,9 @@ class DltimeHandler(BaseHTTPRequestHandler):
         if path == "/api/download/webpage":
             self._download_webpage()
             return
+        if path == "/api/media/shares":
+            self._create_media_share()
+            return
         if path != "/api/uploads":
             self._send_error_json(404, "Unknown local upload endpoint.")
             return
@@ -1217,7 +1902,12 @@ class DltimeHandler(BaseHTTPRequestHandler):
     def do_PUT(self) -> None:
         if not self._is_local_request(require_origin=True):
             return
-        if urlsplit(self.path).path != "/api/account/data":
+        request_path = unquote(urlsplit(self.path).path)
+        media_metadata_match = re.fullmatch(r"/api/media/library/([0-9a-f]{32})", request_path)
+        if media_metadata_match:
+            self._save_media_metadata(media_metadata_match.group(1))
+            return
+        if request_path != "/api/account/data":
             self._send_error_json(404, "Unknown account endpoint.")
             return
         account = self._authenticated_account()
@@ -1249,6 +1939,9 @@ class DltimeHandler(BaseHTTPRequestHandler):
             self._send_error_json(403, "The file shelf is disabled on public deployments.")
             return
         request_path = unquote(urlsplit(self.path).path)
+        if request_path.startswith("/api/media/shares/"):
+            self._revoke_media_share(request_path.removeprefix("/api/media/shares/"))
+            return
         prefix = "/api/uploads/"
         if not request_path.startswith(prefix):
             self._send_error_json(404, "Unknown local upload endpoint.")
@@ -1257,11 +1950,21 @@ class DltimeHandler(BaseHTTPRequestHandler):
         if not upload:
             self._send_error_json(404, "That saved file was not found.")
             return
+        upload_id = request_path[len(prefix):]
         try:
             upload[0].unlink()
         except OSError as error:
             self._send_error_json(500, f"Could not delete the saved file: {error.strerror or 'file system error'}.")
             return
+        self._remove_media_metadata(upload_id, upload[1])
+        with self.server.media_share_lock:
+            expired_tokens = [
+                token
+                for token, shared_id in self.server.media_shares.items()
+                if shared_id == upload_id
+            ]
+            for token in expired_tokens:
+                del self.server.media_shares[token]
         self._send_json(200, {"deleted": True})
 
     def _list_uploads(self) -> None:
@@ -1439,6 +2142,8 @@ def main() -> None:
         UPLOAD_ROOT.mkdir(mode=0o700, parents=True, exist_ok=True)
     initialize_account_database()
     servers = []
+    media_shares: dict[str, str] = {}
+    media_share_lock = threading.Lock()
     lan_address = None
     if args.lan and not PUBLIC_ORIGIN:
         try:
@@ -1467,6 +2172,8 @@ def main() -> None:
             server.website_check_lock = threading.Lock()
             server.webpage_download_attempts = {}
             server.webpage_download_lock = threading.Lock()
+            server.media_shares = media_shares
+            server.media_share_lock = media_share_lock
             servers.append(server)
     except OSError as error:
         for server in servers:
@@ -1487,6 +2194,7 @@ def main() -> None:
     if lan_address:
         print(f"Local network sharing is enabled at http://{lan_address}:{PORT}/")
         print("WARNING: There is no password; devices on this network can view, download, upload, and delete saved files.")
+        print("Selected media shares use unencrypted HTTP and can be opened by anyone with their link while this server runs.")
     if not PUBLIC_ORIGIN:
         print(f"Uploads are stored in {UPLOAD_ROOT}")
     print("Press Ctrl+C to stop the local server.")
