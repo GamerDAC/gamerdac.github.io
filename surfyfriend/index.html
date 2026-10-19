@@ -1,0 +1,1540 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f6f7fb" />
+    <meta
+      name="description"
+      content="SurfyFriend helps you explore direct downloads, supported cloud shares, and public webpage links."
+    />
+    <title>SurfyFriend — Direct File Downloader</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="script.js" defer></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#mainContent">Skip to content</a>
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#home" data-page="home" aria-label="SurfyFriend home">
+        <span class="brand-icon" aria-hidden="true">↓</span>
+        <span>SurfyFriend<span class="brand-period">.</span></span>
+      </a>
+
+      <p class="nav-label">WORKSPACE</p>
+      <nav aria-label="Main navigation">
+        <a href="#home" class="nav-link active" data-page="home">
+          <span aria-hidden="true">⌂</span> Overview
+        </a>
+        <a href="#downloader" class="nav-link" data-page="downloader">
+          <span aria-hidden="true">↧</span> Downloader
+        </a>
+        <a href="#sites" class="nav-link" data-page="sites" data-account-required-page data-full-version-page>
+          <span aria-hidden="true">✧</span> Suggested websites
+          <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+          <span class="feature-lock" data-account-lock hidden aria-hidden="true" title="Sign in to browse suggested websites">🔒</span>
+        </a>
+        <a href="#explorer" class="nav-link" data-page="explorer" data-full-version-page>
+          <span aria-hidden="true">⌖</span> Website Explorer
+          <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+        </a>
+        <a href="#media" class="nav-link" data-page="media" data-full-version-page>
+          <span aria-hidden="true">▶</span> Media player
+          <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+        </a>
+        <a href="#queue" class="nav-link" data-page="queue" data-full-version-page>
+          <span aria-hidden="true">☷</span> Download queue
+          <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+          <span class="nav-count" id="queueCount">0</span>
+        </a>
+        <a href="#uploads" class="nav-link" data-page="uploads" data-full-version-page>
+          <span aria-hidden="true">☁</span> My uploads
+          <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+        </a>
+        <a href="#helper" class="nav-link" data-page="helper" data-account-required-page data-full-version-page>
+          <span aria-hidden="true">✦</span> AI helper
+          <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+          <span class="feature-lock" data-account-lock hidden aria-hidden="true" title="Sign in to use the AI helper">🔒</span>
+        </a>
+        <a href="#history" class="nav-link" data-page="history" data-account-required-page data-full-version-page>
+          <span aria-hidden="true">◷</span> Download history
+          <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+          <span class="feature-lock" data-account-lock hidden aria-hidden="true" title="Sign in to view download history">🔒</span>
+          <span class="nav-count" id="historyCount">0</span>
+        </a>
+        <a href="#achievements" class="nav-link" data-page="achievements" data-full-version-page>
+          <span aria-hidden="true">✧</span> Achievements
+          <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+          <span class="nav-count" id="achievementCount">0</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <a href="#settings" class="nav-link" data-page="settings">
+          <span aria-hidden="true">⚙</span> Settings
+        </a>
+        <div class="privacy-card">
+          <span class="privacy-icon" aria-hidden="true">✦</span>
+          <strong>Your links stay yours</strong>
+          <p>Direct links need no account. Optional Puter AI picks may require sign-in.</p>
+        </div>
+        <p class="sidebar-footnote">SURFYFRIEND · DOWNLOAD YOUR WAY</p>
+      </div>
+    </aside>
+
+    <div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
+
+    <main class="main-content" id="mainContent">
+      <aside class="full-version-notice" id="fullVersionNotice" role="status" hidden>
+        <span class="full-version-notice-icon" aria-hidden="true">🔒</span>
+        <div>
+          <strong>Full version not detected</strong>
+          <p>
+            The static version keeps Overview and Downloader available. Download
+            and run the full SurfyFriend version with Python 3.9 or newer
+            (<code>python3 server.py</code>), then reload to unlock the other
+            workspace features.
+          </p>
+        </div>
+      </aside>
+      <div class="toolbar">
+        <div class="toolbar-search">
+          <span aria-hidden="true">⌕</span>
+          <input
+            type="search"
+            id="toolbarSearch"
+            placeholder="Search your download history..."
+            aria-label="Search download history"
+            disabled
+          />
+          <span class="feature-lock toolbar-search-lock" data-account-lock hidden aria-hidden="true" title="Sign in to view download history">🔒</span>
+          <span class="feature-lock toolbar-search-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+        </div>
+        <div class="toolbar-actions">
+          <button
+            type="button"
+            class="toolbar-button toolbar-account-button"
+            id="toolbarAccountButton"
+            aria-haspopup="dialog"
+            aria-controls="toolbarAccountDialog"
+          >
+            ♙ <span>Sign in</span>
+          </button>
+          <button
+            type="button"
+            class="toolbar-button toolbar-share-button"
+            id="shareSite"
+            title="Share SurfyFriend"
+            aria-label="Share SurfyFriend"
+          >
+            ↗ <span>Share</span>
+          </button>
+          <div class="toolbar-tools">
+            <button
+              type="button"
+              class="toolbar-button toolbar-tools-button"
+              id="toolbarToolsButton"
+              aria-expanded="false"
+              aria-controls="toolbarToolsMenu"
+            >
+              ⋯ <span>Tools</span>
+            </button>
+            <div class="toolbar-tools-menu" id="toolbarToolsMenu" hidden>
+              <button type="button" data-toolbar-page="sites">✧ <span>Suggested websites</span><span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span><span class="feature-lock" data-account-lock hidden aria-hidden="true" title="Sign in to browse suggested websites">🔒</span></button>
+              <button type="button" data-toolbar-page="explorer">⌖ <span>Website Explorer</span><span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span></button>
+              <button type="button" data-toolbar-page="checker">⛨ <span>Website checker</span><span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span></button>
+              <button type="button" data-toolbar-page="media">▶ <span>Media player</span><span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span></button>
+              <button type="button" data-toolbar-page="uploads">☁ <span>My uploads</span><span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span></button>
+              <button type="button" data-toolbar-page="history">◷ <span>Download history</span><span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span><span class="feature-lock" data-account-lock hidden aria-hidden="true" title="Sign in to view download history">🔒</span></button>
+              <button type="button" data-toolbar-page="helper">✦ <span>AI helper</span><span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span><span class="feature-lock" data-account-lock hidden aria-hidden="true" title="Sign in to use the AI helper">🔒</span></button>
+              <button type="button" data-toolbar-page="settings">⚙ <span>Settings</span></button>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="toolbar-button"
+            id="themeToggle"
+            aria-label="Change color theme"
+            title="Change color theme"
+            disabled
+          >
+            <span id="themeToggleIcon" aria-hidden="true">☾</span>
+            <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+          </button>
+          <button
+            type="button"
+            class="toolbar-button quick-button"
+            id="quickDownload"
+            title="Start a download"
+            aria-label="Start a download"
+          >
+            ＋ <span>New download</span>
+          </button>
+          <button
+            type="button"
+            class="toolbar-button queue-toolbar-button"
+            id="quickQueue"
+            title="View download queue"
+            aria-label="View download queue"
+          >
+            ☷
+            <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+          </button>
+        </div>
+      </div>
+      <p class="sr-only" id="shareStatus" role="status" aria-live="polite"></p>
+      <dialog class="toolbar-account-dialog" id="toolbarAccountDialog" aria-labelledby="toolbarAccountTitle">
+        <div class="toolbar-account-heading">
+          <div>
+            <p class="eyebrow">OPTIONAL ACCOUNT SYNC</p>
+            <h2 id="toolbarAccountTitle">Sign in to SurfyFriend</h2>
+          </div>
+          <button
+            type="button"
+            class="toolbar-dialog-close"
+            id="toolbarAccountClose"
+            aria-label="Close sign-in dialog"
+          >×</button>
+        </div>
+        <p class="toolbar-account-description">
+          Sync your XP, achievements, queue, and history across devices.
+        </p>
+        <form id="toolbarAccountForm" class="account-form toolbar-account-form">
+          <label for="toolbarAccountUsername">Username</label>
+          <input
+            id="toolbarAccountUsername"
+            name="username"
+            type="text"
+            minlength="3"
+            maxlength="30"
+            autocomplete="username"
+            pattern="[A-Za-z0-9_\-]{3,30}"
+            placeholder="3–30 letters, numbers, _ or -"
+            required
+          />
+          <label for="toolbarAccountPassword">Password</label>
+          <input
+            id="toolbarAccountPassword"
+            name="password"
+            type="password"
+            minlength="12"
+            maxlength="256"
+            autocomplete="current-password"
+            placeholder="At least 12 characters"
+            required
+          />
+          <div class="account-actions">
+            <button type="submit" class="primary-button" data-account-action="login">
+              Sign in <span aria-hidden="true">→</span>
+            </button>
+            <button type="submit" class="secondary-button" data-account-action="register">
+              Create account
+            </button>
+          </div>
+        </form>
+        <div id="toolbarAccountSignedIn" class="account-signed-in" hidden>
+          <strong>Signed in as <span id="toolbarAccountSignedInName"></span></strong>
+          <a href="#settings" class="secondary-button" data-page="settings">Manage account sync in Settings</a>
+        </div>
+        <p id="toolbarAccountStatus" class="status" role="status" aria-live="polite">
+          Checking account service…
+        </p>
+      </dialog>
+      <dialog class="share-dialog" id="shareDialog" aria-labelledby="shareDialogTitle">
+        <div class="toolbar-account-heading">
+          <div>
+            <p class="eyebrow">PASS IT ALONG</p>
+            <h2 id="shareDialogTitle">Share SurfyFriend</h2>
+          </div>
+          <button
+            type="button"
+            class="toolbar-dialog-close"
+            id="shareDialogClose"
+            aria-label="Close share dialog"
+          >×</button>
+        </div>
+        <p class="toolbar-account-description" id="shareDialogDescription">
+          Copy this link to share SurfyFriend.
+        </p>
+        <label for="shareUrl">Link to share</label>
+        <div class="share-link-control">
+          <input id="shareUrl" type="text" readonly />
+          <button type="button" class="primary-button" id="copyShareLink">Copy link</button>
+        </div>
+        <p class="status" id="shareDialogStatus" role="status" aria-live="polite"></p>
+      </dialog>
+
+      <header class="topbar">
+        <button
+          type="button"
+          class="menu-toggle"
+          id="menuToggle"
+          aria-label="Toggle navigation"
+          aria-expanded="false"
+          aria-controls="sidebar"
+        >
+          ☰
+        </button>
+        <div>
+          <p class="eyebrow" id="pageEyebrow">YOUR FILES, YOUR WAY</p>
+          <h1 class="page-title" id="pageTitle">Overview</h1>
+        </div>
+      </header>
+
+      <section class="page-section" id="home" data-section="home">
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="hero-kicker"
+              ><span class="live-dot"></span> SIMPLE. PRIVATE. DIRECT.</span
+            >
+            <h2>Bring your files<br />a little <span>closer.</span></h2>
+            <p>
+              Paste a direct file link and let your browser handle the rest. No
+              account, no upload, no fuss.
+            </p>
+            <button type="button" class="primary-button" data-go="downloader">
+              Start a download <span aria-hidden="true">→</span>
+            </button>
+          </div>
+          <div class="hero-art" aria-hidden="true">
+            <div class="orbit orbit-one"></div>
+            <div class="orbit orbit-two"></div>
+            <div class="file-illustration"><span>↓</span><i></i></div>
+            <span class="spark spark-one">✦</span>
+            <span class="spark spark-two">✧</span>
+          </div>
+        </div>
+
+        <div class="stats-grid" aria-label="Download statistics">
+          <article class="stat-card">
+            <span class="stat-icon violet" aria-hidden="true">↧</span>
+            <div>
+              <span class="stat-label">SAVED IN HISTORY</span
+              ><strong id="totalDownloads">0</strong>
+            </div>
+            <span class="stat-caption">on this device</span>
+          </article>
+          <article class="stat-card">
+            <span class="stat-icon mint" aria-hidden="true">◷</span>
+            <div>
+              <span class="stat-label">MOST RECENT</span
+              ><strong id="lastDownload">—</strong>
+            </div>
+            <span class="stat-caption">your latest link</span>
+          </article>
+          <article class="stat-card">
+            <span class="stat-icon amber" aria-hidden="true">✦</span>
+            <div>
+              <span class="stat-label">IN YOUR QUEUE</span
+              ><strong id="queuedDownloads">0</strong>
+            </div>
+            <span class="stat-caption">ready when you are</span>
+          </article>
+        </div>
+
+        <section
+          class="progress-card"
+          id="progress"
+          aria-labelledby="progressTitle"
+        >
+          <div class="progress-main">
+            <div class="progress-heading">
+              <div class="progress-emblem" aria-hidden="true">✦</div>
+              <div>
+                <p class="eyebrow">YOUR SURFRYFRIEND JOURNEY</p>
+                <h2 id="progressTitle">Little wins, collected.</h2>
+              </div>
+              <div class="xp-total">
+                <strong id="xpTotal">0</strong><span>XP</span>
+              </div>
+            </div>
+            <div class="level-row">
+              <span class="level-name" id="levelName">Curious Starter</span>
+              <span class="level-next" id="levelNext">0 / 60 XP</span>
+            </div>
+            <progress
+              class="level-progress"
+              id="levelProgress"
+              max="100"
+              value="0"
+              aria-label="Progress to next level"
+            ></progress>
+            <p class="progress-caption" id="progressCaption">
+              Open links, preview media, organize your queue, or add files to
+              earn points.
+            </p>
+          </div>
+          <div class="achievement-side">
+            <div class="achievement-heading">
+              <div>
+                <h3>Your achievements</h3>
+                <p id="achievementSummary">0 of 61 unlocked</p>
+              </div>
+              <button type="button" class="feature-link" data-go="achievements">
+                View all <span aria-hidden="true">→</span>
+                <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+              </button>
+            </div>
+            <div class="featured-achievement" id="featuredAchievement"></div>
+          </div>
+          <p
+            class="progress-status"
+            id="progressStatus"
+            role="status"
+            aria-live="polite"
+          ></p>
+        </section>
+
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">A FEW GOOD THINGS</p>
+            <h2>Made to keep it simple</h2>
+          </div>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <span class="feature-icon">↗</span>
+            <h3>Browser-direct</h3>
+            <p>
+              Links open in your browser, avoiding JavaScript fetch and its CORS
+              restrictions.
+            </p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-icon">◷</span>
+            <h3>Handy history</h3>
+            <p>
+              Quickly find links you opened before. Your history stays in this
+              browser.
+            </p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-icon">☼</span>
+            <h3>Make it yours</h3>
+            <p>Switch between light and dark themes whenever you like.</p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-icon">☷</span>
+            <h3>
+              Download queue
+              <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+            </h3>
+            <p>Collect several direct links, then open them one at a time.</p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-icon">☁</span>
+            <h3>
+              Local file shelf
+              <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+            </h3>
+            <p>
+              Save files on this computer with the localhost uploader and
+              download them later.
+            </p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-icon">⛨</span>
+            <h3>
+              Website checker
+              <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+            </h3>
+            <p>Check a site's HTTPS certificate and latest malware report.</p>
+            <button type="button" class="feature-link" data-go="checker">
+              Check a website <span aria-hidden="true">→</span>
+            </button>
+          </article>
+          <article class="feature-card">
+            <span class="feature-icon">✦</span>
+            <h3>Private helper</h3>
+            <p>
+              Get quick answers about links, queues, uploads, and the workspace
+              without an account.
+            </p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-icon">▶</span>
+            <h3>
+              Media previews
+              <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+            </h3>
+            <p>
+              Play direct media links or preview files from your device without
+              uploading them.
+            </p>
+            <button type="button" class="feature-link" data-go="media">
+              Open Media player <span aria-hidden="true">→</span>
+            </button>
+          </article>
+          <article class="feature-card">
+            <span class="feature-icon">✧</span>
+            <h3>Trusted places to start</h3>
+            <p>
+              Browse software, media, entertainment, games, books, open data,
+              and official social-account exports.
+            </p>
+            <button type="button" class="feature-link" data-go="sites">
+              Suggested websites <span aria-hidden="true">→</span>
+            </button>
+          </article>
+          <article class="feature-card">
+            <span class="feature-icon">⌖</span>
+            <h3>
+              Explore the web
+              <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+            </h3>
+            <p>
+              Visit a new website, collect XP for unique addresses, and keep
+              track of your recent explorations.
+            </p>
+            <button type="button" class="feature-link" data-go="explorer">
+              Open Website Explorer <span aria-hidden="true">→</span>
+            </button>
+          </article>
+        </div>
+        <p class="notice">
+          <strong>Heads up:</strong> SurfyFriend opens direct file links and
+          supported cloud shares; webpage scanning only finds links a site
+          allows your browser to read. The source controls whether a link
+          downloads or opens a preview. It does not bypass sign-ins or
+          protected streams.
+        </p>
+      </section>
+
+      <section
+        class="page-section"
+        id="achievements"
+        data-section="achievements"
+        hidden
+      >
+        <div class="section-intro">
+          <p class="eyebrow">YOUR PROGRESS, YOUR PACE</p>
+          <h2>Achievements</h2>
+          <p>
+            Collect badges as you explore SurfyFriend. Claim each unlocked badge for
+            a celebration; the sidebar number shows how many are waiting.
+            Progress stays in this browser unless you choose to sync it with
+            an optional SurfyFriend account. SurfyFriend never reports whether a link
+            finished downloading.
+          </p>
+        </div>
+        <div class="achievement-page-summary">
+          <span class="achievement-page-emblem" aria-hidden="true">✧</span>
+          <div>
+            <strong id="achievementPageSummary">0 of 61 badges unlocked</strong>
+            <p id="achievementPageLevel">Curious Starter · 0 XP</p>
+          </div>
+          <button type="button" class="primary-button" data-go="downloader">
+            Earn points <span aria-hidden="true">→</span>
+          </button>
+        </div>
+        <div
+          class="achievement-filters"
+          role="group"
+          aria-label="Filter achievements"
+        >
+          <button
+            type="button"
+            class="achievement-filter selected"
+            data-achievement-filter="all"
+            aria-pressed="true"
+          >
+            All <span id="allAchievementCount">61</span>
+          </button>
+          <button
+            type="button"
+            class="achievement-filter"
+            data-achievement-filter="unlocked"
+            aria-pressed="false"
+          >
+            Unlocked <span id="unlockedAchievementCount">0</span>
+          </button>
+          <button
+            type="button"
+            class="achievement-filter"
+            data-achievement-filter="locked"
+            aria-pressed="false"
+          >
+            To unlock <span id="lockedAchievementCount">61</span>
+          </button>
+        </div>
+        <div
+          class="achievement-grid full-achievement-grid"
+          id="allAchievementsGrid"
+          aria-label="All achievements"
+        ></div>
+        <p class="notice">
+          <strong>Fair play:</strong> Points count links opened, links added to
+          your queue, media successfully previewed, and files saved on your
+          local shelf. SurfyFriend cannot verify that a remote download completed.
+        </p>
+      </section>
+
+      <section
+        class="page-section"
+        id="downloader"
+        data-section="downloader"
+        hidden
+      >
+        <div class="section-intro">
+          <p class="eyebrow">FILES, SHARES & WEB PAGES</p>
+          <h2>What are we grabbing?</h2>
+          <p>
+            Paste a direct file link or a supported public cloud share. Website
+            homepages and HTML pages download as files when the server can read
+            them. To find files linked from a public webpage, use the scanner below.
+          </p>
+        </div>
+        <div class="download-layout">
+          <form class="download-card" id="downloadForm">
+            <label for="url">File or shared-link URL</label>
+            <div class="url-input-wrap">
+              <span aria-hidden="true">↗</span>
+              <input
+                type="url"
+                id="url"
+                placeholder="https://example.com/files/archive.zip"
+                aria-label="File or shared-link URL"
+                aria-describedby="linkHint"
+                autocomplete="url"
+                required
+              />
+              <button type="button" class="paste-button" id="pasteUrl">
+                Paste
+              </button>
+              <button
+                type="button"
+                class="clear-url-button"
+                id="clearUrl"
+                aria-label="Clear file or shared link"
+                title="Clear file or shared link"
+                hidden
+              >
+                ×
+              </button>
+            </div>
+            <p class="link-hint" id="linkHint" aria-live="polite">
+              Use a direct file URL or a supported Google Drive, Dropbox, or
+              OneDrive share. A share may open its provider page first.
+            </p>
+            <label for="filename"
+              >Save as <span class="optional">(optional)</span></label
+            >
+            <input
+              type="text"
+              id="filename"
+              placeholder="Leave blank to use the file's name"
+              autocomplete="off"
+              maxlength="180"
+            />
+            <button type="submit" class="primary-button submit-button">
+              Download link <span aria-hidden="true">↓</span>
+            </button>
+            <button
+              type="button"
+              class="secondary-button queue-submit"
+              id="addToQueue"
+            >
+              Add to download queue <span aria-hidden="true">＋</span>
+            </button>
+            <p id="status" class="status" role="status" aria-live="polite"></p>
+          </form>
+          <aside class="download-info">
+            <div class="info-icon" aria-hidden="true">✦</div>
+            <h3>How it works</h3>
+            <ol>
+              <li>
+                <span>1</span>
+                <p>Paste a file link or supported cloud share.</p>
+              </li>
+              <li>
+                <span>2</span>
+                <p>Choose a name, or keep the original.</p>
+              </li>
+              <li>
+                <span>3</span>
+                <p>Direct files download; HTML pages save as files when possible.</p>
+              </li>
+            </ol>
+            <p class="info-note">
+              Cloud shares may open a preview. Use the provider's own Download
+              option if shown; sign-in and sharing permissions still apply.
+            </p>
+          </aside>
+        </div>
+        <section class="page-scanner-card" aria-labelledby="pageScannerTitle">
+          <div class="page-scanner-heading">
+            <span class="page-scanner-icon" aria-hidden="true">⌕</span>
+            <div>
+              <h3 id="pageScannerTitle">Find downloadable links on a webpage</h3>
+              <p>
+                Paste a public page address to find file links it exposes. The
+                site must allow your browser to read the page.
+              </p>
+            </div>
+          </div>
+          <form id="pageScanForm" class="page-scan-form">
+            <label for="webpageUrl">Public webpage address</label>
+            <div class="page-scan-controls">
+              <input
+                type="url"
+                id="webpageUrl"
+                placeholder="https://example.com/downloads"
+                autocomplete="url"
+                required
+              />
+              <button type="submit" class="primary-button" id="scanPageButton">
+                Find links <span aria-hidden="true">→</span>
+              </button>
+            </div>
+          </form>
+          <p id="pageScanStatus" class="status" role="status" aria-live="polite"></p>
+          <div id="pageLinkResults" class="page-link-results" hidden>
+            <div class="page-link-results-heading">
+              <strong id="pageLinkCount"></strong>
+              <button
+                type="button"
+                class="secondary-button"
+                id="addPageLinksToQueue"
+                disabled
+              >
+                Add selected to queue
+              </button>
+            </div>
+            <div id="pageLinkList" class="page-link-list"></div>
+          </div>
+          <p class="info-note">
+            Scanning happens in your browser, without sending the page through
+            SurfyFriend's server. Some sites block this kind of access; no sign-in,
+            paywall, or stream protection is bypassed.
+          </p>
+        </section>
+      </section>
+
+      <section class="page-section" id="sites" data-section="sites" hidden>
+        <div class="section-intro">
+          <p class="eyebrow">A GOOD PLACE TO START</p>
+          <h2>Suggested websites</h2>
+          <p>
+            Browse known sources for software, media, entertainment, games,
+            books, open data, and official social-account exports. Always check
+            the license and download rules on the source.
+          </p>
+        </div>
+        <div data-account-required-content hidden>
+        <section class="puter-suggestions" aria-labelledby="puterSuggestionsTitle">
+          <div>
+            <p class="eyebrow">OPTIONAL PERSONALIZED PICKS</p>
+            <h3 id="puterSuggestionsTitle">Ask Puter AI for website ideas</h3>
+            <p>
+              Puter can suggest sites from SurfyFriend's list and sites beyond it.
+              SurfyFriend sends your selected topic and the built-in list, but not
+              your download history, queue, or entered links. Puter may ask you
+              to sign in, and its user-pays model can use your account's allowance
+              or billing.
+            </p>
+          </div>
+          <div class="puter-suggestion-controls">
+            <label for="suggestionCategory">What are you looking for?</label>
+            <div class="puter-suggestion-actions">
+              <select id="suggestionCategory">
+                <option value="software">Software</option>
+                <option value="media">Media</option>
+                <option value="books">Books and learning</option>
+                <option value="data">Open data</option>
+                <option value="social">Social-account exports</option>
+                <option value="entertainment">Entertainment</option>
+                <option value="games">Games</option>
+                <option value="entertainment">Entertainment</option>
+                <option value="games">Games</option>
+              </select>
+              <button type="button" class="primary-button" id="getPuterSuggestions">
+                Get AI picks <span aria-hidden="true">✦</span>
+              </button>
+            </div>
+          </div>
+          <p id="puterSuggestionStatus" class="status" role="status" aria-live="polite"></p>
+          <div id="puterSuggestionResults" class="site-grid puter-suggestion-results" hidden></div>
+          <p class="info-note">
+            Puter uses its existing knowledge, not a live web search. Suggestions
+            outside SurfyFriend's curated list are unverified; check the site, address,
+            license, and download rules before using them. Only HTTPS links are
+            shown. Puter requires an http:// or https:// page, not a file opened
+            directly.
+            <a href="https://developer.puter.com/" target="_blank" rel="noopener noreferrer">About Puter.js</a>
+          </p>
+        </section>
+        <div class="site-filter-row" role="group" aria-label="Filter suggested websites">
+          <button type="button" class="site-filter selected" data-site-filter="all" aria-pressed="true">All sources</button>
+          <button type="button" class="site-filter" data-site-filter="software" aria-pressed="false">Software</button>
+          <button type="button" class="site-filter" data-site-filter="media" aria-pressed="false">Media</button>
+          <button type="button" class="site-filter" data-site-filter="books" aria-pressed="false">Books</button>
+          <button type="button" class="site-filter" data-site-filter="data" aria-pressed="false">Open data</button>
+          <button type="button" class="site-filter" data-site-filter="social" aria-pressed="false">Social exports</button>
+          <button type="button" class="site-filter" data-site-filter="entertainment" aria-pressed="false">Entertainment</button>
+          <button type="button" class="site-filter" data-site-filter="games" aria-pressed="false">Games</button>
+          <button type="button" class="site-filter" data-site-filter="entertainment" aria-pressed="false">Entertainment</button>
+          <button type="button" class="site-filter" data-site-filter="games" aria-pressed="false">Games</button>
+        </div>
+        <div id="suggestedSiteGrid" class="site-grid"></div>
+        <p class="notice">
+          <strong>Use official options:</strong> This page suggests places to
+          find openly available or official downloads. Licenses and permissions
+          vary by item. SurfyFriend does not download protected social-media streams
+          or content you do not have permission to access.
+        </p>
+        </div>
+        <aside class="account-required-notice" data-account-required-notice role="status">
+          <span class="full-version-notice-icon" aria-hidden="true">♙</span>
+          <div>
+            <strong>Sign in to browse suggested websites</strong>
+            <p>Create an account or sign in to access the curated website directory and personalized picks.</p>
+            <button type="button" class="secondary-button" data-go="settings">
+              Go to account settings <span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </aside>
+      </section>
+
+      <section class="page-section" id="explorer" data-section="explorer" hidden>
+        <div class="section-intro">
+          <p class="eyebrow">A LITTLE ADVENTURE, ONE LINK AT A TIME</p>
+          <h2>Website Explorer</h2>
+          <p>
+            Enter a website address to open it in a new tab. Earn XP the first
+            time you explore each unique address; coming back to the same
+            address is always welcome, but it won’t earn points again.
+          </p>
+        </div>
+        <section class="website-explorer-card" aria-labelledby="websiteExplorerTitle">
+          <div class="website-explorer-heading">
+            <span class="explorer-icon" aria-hidden="true">⌖</span>
+            <div>
+              <h3 id="websiteExplorerTitle">Where would you like to go?</h3>
+              <p>Type a full address or just a site name, like example.com.</p>
+            </div>
+          </div>
+          <form id="websiteExplorerForm" class="website-explorer-form">
+            <label for="websiteExplorerUrl">Website address</label>
+            <div class="website-explorer-controls">
+              <input
+                type="text"
+                id="websiteExplorerUrl"
+                placeholder="example.com"
+                autocomplete="url"
+                autocapitalize="none"
+                spellcheck="false"
+                required
+              />
+              <button type="submit" class="primary-button">
+                Explore website <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </form>
+          <p id="websiteExplorerStatus" class="status" role="status" aria-live="polite"></p>
+          <p class="info-note">
+            XP and visited addresses stay on this device unless you sign in to
+            an optional SurfyFriend account, which syncs them with the configured
+            server. SurfyFriend opens the address you enter but cannot check what it
+            contains or whether it loaded. Only http:// and https:// websites
+            can be opened. Check unfamiliar addresses before visiting.
+          </p>
+        </section>
+        <section class="explorer-history-card" aria-labelledby="explorerHistoryTitle">
+          <div class="queue-heading">
+            <div>
+              <h3 id="explorerHistoryTitle">Your recent explorations</h3>
+              <p id="explorerVisitCount">0 unique websites explored on this device</p>
+            </div>
+          </div>
+          <div id="explorerRecentList" class="explorer-recent-list"></div>
+          <p id="explorerHistoryEmpty" class="explorer-history-empty">
+            Your visited websites will appear here.
+          </p>
+        </section>
+      </section>
+
+      <section class="page-section" id="checker" data-section="checker" hidden>
+        <div class="section-intro">
+          <p class="eyebrow">CHECK BEFORE YOU VISIT</p>
+          <h2>Website checker</h2>
+          <p>
+            Check the site's HTTPS certificate and look up its latest malware
+            reputation report. A clean result is not a guarantee that a site is safe.
+          </p>
+        </div>
+        <section class="website-checker-card" aria-labelledby="websiteCheckerTitle">
+          <div class="website-checker-heading">
+            <span class="explorer-icon" aria-hidden="true">⛨</span>
+            <div>
+              <h3 id="websiteCheckerTitle">Check a website homepage</h3>
+              <p>Enter a domain or homepage, such as example.com.</p>
+            </div>
+          </div>
+          <form id="websiteCheckerForm" class="website-checker-form">
+            <label for="websiteCheckerUrl">Website address</label>
+            <div class="website-checker-controls">
+              <input
+                type="text"
+                id="websiteCheckerUrl"
+                placeholder="example.com"
+                autocomplete="url"
+                autocapitalize="none"
+                spellcheck="false"
+                maxlength="2048"
+                required
+              />
+              <button type="submit" class="primary-button" id="websiteCheckerSubmit">
+                Check website <span aria-hidden="true">→</span>
+              </button>
+            </div>
+          </form>
+          <p id="websiteCheckerStatus" class="status" role="status" aria-live="polite"></p>
+          <section id="websiteCheckerResult" class="website-checker-results" aria-label="Website check results" hidden>
+            <article class="website-checker-result">
+              <span class="website-checker-result-label">HTTPS certificate</span>
+              <strong id="websiteCheckerTlsStatus"></strong>
+              <p id="websiteCheckerTlsMessage"></p>
+            </article>
+            <article class="website-checker-result">
+              <span class="website-checker-result-label">Malware reputation · <span id="websiteCheckerProvider">VirusTotal</span></span>
+              <strong id="websiteCheckerMalwareStatus"></strong>
+              <p id="websiteCheckerMalwareMessage"></p>
+              <p id="websiteCheckerMalwareStats" class="website-checker-stats" hidden></p>
+            </article>
+          </section>
+          <p class="info-note">
+            Certificate checks are made by this server. When configured, VirusTotal
+            receives the submitted homepage address to look up its security report.
+            Only homepage URLs are accepted; do not submit private or personalized
+            links. Reports may be incomplete or out of date, and neither check can
+            guarantee a site is safe.
+          </p>
+        </section>
+      </section>
+
+      <section class="page-section" id="media" data-section="media" hidden>
+        <div class="section-intro">
+          <p class="eyebrow">PLAY OR PREVIEW IN YOUR BROWSER</p>
+          <h2>Bring media into view.</h2>
+          <p>
+            Play a direct audio or video link, preview an image, or choose a
+            media file from this device. Nothing is uploaded by this tool.
+          </p>
+        </div>
+        <div class="media-layout">
+          <form class="media-source-card" id="mediaUrlForm">
+            <span class="media-icon" aria-hidden="true">▶</span>
+            <h3>Open a media link</h3>
+            <p>
+              Use the direct address of an audio, video, or image file.
+              Streaming-service pages and sign-in pages are not supported.
+            </p>
+            <label for="mediaUrl">Media link</label>
+            <div class="media-url-row">
+              <input
+                type="url"
+                id="mediaUrl"
+                placeholder="https://example.com/media/video.mp4"
+                autocomplete="url"
+              />
+              <button type="submit" class="primary-button">
+                Load media <span aria-hidden="true">→</span>
+              </button>
+            </div>
+            <label for="mediaType">Media type</label>
+            <select id="mediaType">
+              <option value="auto">Detect from the link</option>
+              <option value="video">Video</option>
+              <option value="audio">Audio</option>
+              <option value="image">Image</option>
+            </select>
+            <div class="media-divider">
+              <span>or choose a file from this device</span>
+            </div>
+            <label class="media-file-picker" for="mediaFile">
+              <span aria-hidden="true">↑</span>
+              <span
+                ><strong>Browse media files</strong
+                ><small>Your file stays on this device</small></span
+              >
+              <input
+                id="mediaFile"
+                type="file"
+                accept="audio/*,video/*,image/*"
+              />
+            </label>
+            <p class="info-note">
+              Your browser plays the media directly from its source. The source
+              may require access or may prevent playback. SurfyFriend does not bypass
+              sign-ins or download protected streams.
+            </p>
+          </form>
+          <section class="media-viewer-card" aria-label="Media preview">
+            <div class="media-viewer-heading">
+              <div>
+                <h3 id="mediaTitle">Your media will appear here</h3>
+                <p id="mediaDetails">
+                  Choose a file or paste a direct link to get started.
+                </p>
+              </div>
+              <button
+                type="button"
+                class="secondary-button"
+                id="clearMedia"
+                hidden
+              >
+                Close
+              </button>
+            </div>
+            <div class="media-viewer-empty" id="mediaEmpty">
+              <span aria-hidden="true">♫</span>
+              <strong>Ready when you are</strong>
+              <p>Video, audio, and image previews appear here.</p>
+            </div>
+            <div class="media-player" id="mediaPlayer" hidden></div>
+            <p
+              class="status"
+              id="mediaStatus"
+              role="status"
+              aria-live="polite"
+            ></p>
+          </section>
+        </div>
+        <p class="notice">
+          <strong>Tip:</strong> If a link opens a webpage instead of media, find
+          the source site's direct file link or use its official player. Browser
+          support varies by format.
+        </p>
+      </section>
+
+      <section class="page-section" id="queue" data-section="queue" hidden>
+        <div class="section-intro">
+          <p class="eyebrow">PLAN YOUR DOWNLOADS</p>
+          <h2>Queue it up.</h2>
+          <p>
+            Save direct links here and open them when you’re ready. Your queue
+            stays in this browser.
+          </p>
+        </div>
+        <div class="queue-layout">
+          <div class="queue-panel">
+            <div class="queue-heading">
+              <div>
+                <h3>Up next</h3>
+                <p id="queueSummary">No links waiting</p>
+              </div>
+              <div class="queue-actions">
+                <button
+                  type="button"
+                  class="secondary-button danger-button"
+                  id="clearQueue"
+                >
+                  Clear queue
+                </button>
+                <button
+                  type="button"
+                  class="primary-button queue-next-button"
+                  id="openNextQueue"
+                >
+                  Open next <span aria-hidden="true">→</span>
+                </button>
+              </div>
+            </div>
+            <div class="queue-list" id="queueList"></div>
+            <div class="queue-empty" id="queueEmpty">
+              <span aria-hidden="true">☷</span>
+              <strong>Your queue is clear</strong>
+              <p>
+                Add a URL from the Downloader or paste a list of links here.
+              </p>
+              <button
+                type="button"
+                class="secondary-button"
+                data-go="downloader"
+              >
+                Add a download
+              </button>
+            </div>
+            <p
+              id="queueStatus"
+              class="status"
+              role="status"
+              aria-live="polite"
+            ></p>
+          </div>
+          <form class="bulk-queue-panel" id="bulkQueueForm">
+            <span class="bulk-icon" aria-hidden="true">＋</span>
+            <h3>Add a batch of links</h3>
+            <p>
+              Paste up to 50 direct file links or supported Google Drive,
+              Dropbox, and OneDrive share links, one per line. Invalid or
+              duplicate links are skipped and reported.
+            </p>
+            <label class="visually-hidden" for="bulkQueueUrls"
+              >File or cloud-share links, one per line</label
+            >
+            <textarea
+              id="bulkQueueUrls"
+              rows="7"
+              placeholder="https://example.com/files/one.zip&#10;https://example.com/files/two.pdf"
+            ></textarea>
+            <button type="submit" class="primary-button bulk-add-button">
+              Add links to queue <span aria-hidden="true">→</span>
+            </button>
+            <p class="info-note">
+              Opening is always manual and one link at a time. Cloud shares may
+              open their provider page and still follow its access rules.
+            </p>
+          </form>
+        </div>
+      </section>
+
+      <section class="page-section" id="uploads" data-section="uploads" hidden>
+        <div class="section-intro">
+          <p class="eyebrow">STORED ON THIS COMPUTER</p>
+          <h2>Your local file shelf.</h2>
+          <p>
+            Upload files to this computer, then download or remove them here
+            later. Files are not sent to a website.
+          </p>
+        </div>
+        <div class="upload-layout">
+          <form class="upload-card" id="uploadForm">
+            <span class="upload-icon" aria-hidden="true">↑</span>
+            <h3>Add files to your shelf</h3>
+            <p>Choose one or more files. Each file can be up to 500 MB.</p>
+            <label
+              class="upload-dropzone"
+              id="uploadDropzone"
+              for="uploadFiles"
+            >
+              <span class="upload-dropzone-icon" aria-hidden="true">↑</span>
+              <strong>Drop files here</strong>
+              <span>or <u>browse your computer</u></span>
+              <small>Up to 500 MB per file</small>
+              <input id="uploadFiles" type="file" multiple />
+            </label>
+            <div
+              class="upload-selection"
+              id="uploadSelection"
+              aria-live="polite"
+            >
+              No files selected
+            </div>
+            <button type="submit" class="primary-button" id="uploadSubmit">
+              Upload to this computer <span aria-hidden="true">→</span>
+            </button>
+            <progress
+              id="uploadProgress"
+              max="100"
+              value="0"
+              aria-label="Upload progress"
+              hidden
+            ></progress>
+            <p
+              id="uploadStatus"
+              class="status"
+              role="status"
+              aria-live="polite"
+            ></p>
+            <p class="info-note">
+              To enable uploads, run <code>python3 server.py</code> from the
+              SurfyFriend project folder, then open
+              <a href="http://127.0.0.1:8765/">http://127.0.0.1:8765/</a>. Files
+              stay in <code>~/.dropzone/uploads</code> on this computer.
+            </p>
+            <div class="network-sharing">
+              <div class="network-sharing-heading">
+                <span aria-hidden="true">⌁</span
+                ><strong>Optional: same-network sharing</strong>
+              </div>
+              <p id="networkSharingStatus">
+                Off by default. Restart the server with
+                <code>python3 server.py --lan</code> from the SurfyFriend project
+                folder to let devices on your Wi-Fi/LAN access this file shelf.
+              </p>
+              <p class="network-sharing-warning">
+                Without a password or encryption, anyone on that network can
+                view, upload, download, and delete files in this shelf. Only
+                enable this on a trusted network; never expose the port to the
+                internet.
+              </p>
+            </div>
+          </form>
+          <div class="uploads-card">
+            <div class="uploads-heading">
+              <div>
+                <h3>Saved files</h3>
+                <p id="uploadsSummary">Checking the local file shelf…</p>
+              </div>
+              <button
+                type="button"
+                class="secondary-button"
+                id="refreshUploads"
+              >
+                Refresh
+              </button>
+            </div>
+            <div class="uploaded-file-list" id="uploadedFileList"></div>
+            <div class="uploads-empty" id="uploadsEmpty" hidden>
+              <span aria-hidden="true">▱</span>
+              <strong>No files saved yet</strong>
+              <p>Files uploaded from this computer will appear here.</p>
+            </div>
+          </div>
+        </div>
+        <p class="notice">
+          <strong>Local storage:</strong> Files remain on this computer until
+          deleted. Network access is off by default and only enabled when the
+          server is started with <code>--lan</code>.
+        </p>
+      </section>
+
+      <section class="page-section" id="helper" data-section="helper" hidden>
+        <div class="section-intro">
+          <p class="eyebrow">PRIVATE, BUILT-IN GUIDANCE</p>
+          <h2>Ask the SurfyFriend helper.</h2>
+          <p>
+            Get quick help with downloads, media previews, achievements, the
+            queue, history, and local uploads.
+          </p>
+        </div>
+        <div class="helper-card" id="helperCard" hidden>
+          <div class="helper-heading">
+            <span class="helper-avatar" aria-hidden="true">✦</span>
+            <div>
+              <h3>SurfyFriend helper</h3>
+              <p>Context-aware help · private and on this device</p>
+            </div>
+            <span class="helper-status"><i></i> Ready</span>
+          </div>
+          <div
+            class="helper-messages"
+            id="helperMessages"
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions"
+          >
+            <div class="helper-message assistant-message">
+              Hi! I can check the format of the link in your Downloader, help
+              you preview media, explain why a download or upload may not be
+              working, and show you where your files and queue are saved. I
+              can’t test remote links or see files on your computer.
+            </div>
+          </div>
+          <div class="helper-suggestions" aria-label="Suggested questions">
+            <button
+              type="button"
+              class="helper-suggestion"
+              data-helper-prompt="Can you check the link I entered?"
+            >
+              Check my link
+            </button>
+            <button
+              type="button"
+              class="helper-suggestion"
+              data-helper-prompt="My download opens a webpage instead"
+            >
+              Fix a download
+            </button>
+            <button
+              type="button"
+              class="helper-suggestion"
+              data-helper-prompt="Why aren't uploads working?"
+            >
+              Fix uploads
+            </button>
+            <button
+              type="button"
+              class="helper-suggestion"
+              data-helper-prompt="Where are my downloads saved?"
+            >
+              Where are files saved?
+            </button>
+            <button
+              type="button"
+              class="helper-suggestion"
+              data-helper-prompt="How do points and badges work?"
+            >
+              How do points work?
+            </button>
+          </div>
+          <form class="helper-form" id="helperForm">
+            <label class="visually-hidden" for="helperInput"
+              >Ask the SurfyFriend helper</label
+            >
+            <input
+              id="helperInput"
+              type="text"
+              maxlength="300"
+              placeholder="Ask about downloads, queues, or uploads…"
+              autocomplete="off"
+            />
+            <button
+              type="submit"
+              class="primary-button"
+              aria-label="Send question"
+            >
+              Send <span aria-hidden="true">→</span>
+            </button>
+          </form>
+          <p class="helper-disclaimer">
+            Answers are generated by a built-in guide in this browser, not sent
+            to an AI service. It can explain and check link format, but cannot
+            test remote access or confirm a download completed.
+          </p>
+        </div>
+        <aside class="account-required-notice" id="helperAccountNotice" data-account-required-notice role="status">
+          <span class="full-version-notice-icon" aria-hidden="true">♙</span>
+          <div>
+            <strong>Sign in to use the AI helper</strong>
+            <p>Create an account or sign in to unlock private, built-in help.</p>
+            <button type="button" class="secondary-button" data-go="settings">
+              Go to account settings <span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </aside>
+      </section>
+
+      <section class="page-section" id="history" data-section="history" hidden>
+        <div data-account-required-content hidden>
+        <div class="section-heading history-heading">
+          <div>
+            <p class="eyebrow">ON THIS DEVICE</p>
+            <h2>Your recent links</h2>
+            <p class="section-description">
+              Links you opened from this browser are kept here for convenience.
+            </p>
+          </div>
+          <button type="button" class="secondary-button" id="clearHistory">
+            Clear history
+          </button>
+        </div>
+        <div id="historyList" class="history-list"></div>
+        <p id="historyEmpty" class="empty-state" hidden>
+          No links yet. Your next direct download will show up here.
+        </p>
+        <p id="historyNoResults" class="empty-state" hidden>
+          No history matches that search.
+        </p>
+        <p
+          id="historyStatus"
+          class="status"
+          role="status"
+          aria-live="polite"
+        ></p>
+        </div>
+        <aside class="account-required-notice" data-account-required-notice role="status">
+          <span class="full-version-notice-icon" aria-hidden="true">♙</span>
+          <div>
+            <strong>Sign in to view download history</strong>
+            <p>Your saved links are available here after you sign in to your SurfyFriend account.</p>
+            <button type="button" class="secondary-button" data-go="settings">
+              Go to account settings <span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </aside>
+      </section>
+
+      <section
+        class="page-section"
+        id="settings"
+        data-section="settings"
+        hidden
+      >
+        <div class="section-intro">
+          <p class="eyebrow">MAKE YOURSELF AT HOME</p>
+          <h2>Settings</h2>
+          <p>Choose how SurfyFriend looks, sounds, and saves your progress.</p>
+        </div>
+        <div class="settings-card">
+          <div>
+            <h3>Appearance</h3>
+            <p>Pick a palette, or cycle through them with the toolbar theme button.
+              <span class="feature-lock" data-full-version-lock hidden aria-hidden="true" title="Requires the full version">🔒</span>
+            </p>
+          </div>
+          <div
+            class="theme-options"
+            role="group"
+            aria-label="Choose appearance"
+          >
+            <button type="button" class="theme-option" data-theme="light" aria-pressed="false" disabled>
+              <span>Light</span>
+            </button>
+            <button type="button" class="theme-option" data-theme="dark" aria-pressed="false" disabled>
+              <span>Dark</span>
+            </button>
+            <button type="button" class="theme-option" data-theme="ocean" aria-pressed="false" disabled>
+              <span>Ocean</span>
+            </button>
+            <button type="button" class="theme-option" data-theme="sunset" aria-pressed="false" disabled>
+              <span>Sunset</span>
+            </button>
+            <button type="button" class="theme-option" data-theme="forest" aria-pressed="false" disabled>
+              <span>Forest</span>
+            </button>
+            <button type="button" class="theme-option" data-theme="midnight" aria-pressed="false" disabled>
+              <span>Midnight</span>
+            </button>
+          </div>
+        </div>
+        <section class="account-settings-card" aria-labelledby="accountSettingsTitle">
+          <div class="account-settings-heading">
+            <span class="account-icon" aria-hidden="true">♙</span>
+            <div>
+              <h3 id="accountSettingsTitle">Optional SurfyFriend account</h3>
+              <p>
+                Sync XP, achievements, your Website Explorer addresses, queue,
+                and download history between devices. These details are stored
+                on the SurfyFriend server, not just in this browser.
+              </p>
+            </div>
+          </div>
+          <form id="accountSignInForm" class="account-form">
+            <label for="accountUsername">Username</label>
+            <input
+              id="accountUsername"
+              name="username"
+              type="text"
+              minlength="3"
+              maxlength="30"
+              autocomplete="username"
+              pattern="[A-Za-z0-9_\-]{3,30}"
+              placeholder="3–30 letters, numbers, _ or -"
+              required
+            />
+            <label for="accountPassword">Password</label>
+            <input
+              id="accountPassword"
+              name="password"
+              type="password"
+              minlength="12"
+              maxlength="256"
+              autocomplete="current-password"
+              placeholder="At least 12 characters"
+              required
+            />
+            <div class="account-actions">
+              <button
+                type="submit"
+                class="primary-button"
+                data-account-action="login"
+              >
+                Sign in <span aria-hidden="true">→</span>
+              </button>
+              <button
+                type="submit"
+                class="secondary-button"
+                data-account-action="register"
+              >
+                Create account
+              </button>
+            </div>
+          </form>
+          <div id="accountSignedIn" class="account-signed-in" hidden>
+            <strong>Signed in as <span id="accountSignedInName"></span></strong>
+            <div class="account-actions">
+              <button type="button" class="primary-button" id="syncAccountData">
+                Load account on this device <span aria-hidden="true">↻</span>
+              </button>
+              <button type="button" class="secondary-button" id="uploadLocalAccountData">
+                Save this device to account
+              </button>
+              <button type="button" class="secondary-button" id="accountSignOut">
+                Sign out
+              </button>
+            </div>
+          </div>
+          <p id="accountStatus" class="status" role="status" aria-live="polite">
+            Checking account service…
+          </p>
+          <p class="info-note">
+            Passwords are stored as salted, slow hashes; account sessions use
+            secure cookies over HTTPS. Account data contains website addresses
+            and download history, which may be private. Only create an account
+            on a SurfyFriend server you trust. Hosted use requires an HTTPS reverse
+            proxy and persistent server storage.
+          </p>
+        </section>
+        <section class="controls-settings-card" aria-labelledby="controlsSettingsTitle">
+          <div class="controls-settings-heading">
+            <span class="account-icon" aria-hidden="true">⌨</span>
+            <div>
+              <h3 id="controlsSettingsTitle">Keyboard, gamepad &amp; sounds</h3>
+              <p>
+                Navigate SurfyFriend without a browser extension. Shortcuts stay
+                inactive while you type in a field.
+              </p>
+            </div>
+          </div>
+          <div class="keyboard-shortcut-list" aria-label="Keyboard shortcuts">
+            <span><kbd>Alt</kbd> + <kbd>1</kbd>–<kbd>9</kbd> <span>Open workspace pages</span></span>
+            <span><kbd>Alt</kbd> + <kbd>0</kbd> <span>Open Settings</span></span>
+            <span><kbd>Esc</kbd> <span>Go to the previous page</span></span>
+            <span><kbd>Tab</kbd>, <kbd>Enter</kbd>, <kbd>Space</kbd> <span>Move and activate controls</span></span>
+          </div>
+          <p id="gamepadStatus" class="status" role="status" aria-live="polite">
+            Connect a gamepad to navigate with its D-pad or left stick.
+          </p>
+          <p class="info-note">
+            Gamepad: D-pad or left stick moves focus; A/0 activates; B/1 goes
+            back. Typing a website address still uses your keyboard.
+          </p>
+          <label class="sound-toggle-row" for="soundEffectsToggle">
+            <span>
+              <strong>Sound effects</strong>
+              <small>Quiet navigation, XP, and badge sounds. Off by default.</small>
+            </span>
+            <input id="soundEffectsToggle" type="checkbox" />
+          </label>
+          <p id="soundEffectsStatus" class="status" role="status" aria-live="polite"></p>
+        </section>
+        <div class="settings-card">
+          <div>
+            <h3>Download history</h3>
+            <p>
+              History stays in this browser by default. When signed in with
+              account sync enabled, it is also saved to the SurfyFriend server.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="secondary-button danger-button"
+            id="clearHistorySettings"
+          >
+            Clear history
+          </button>
+        </div>
+        <div class="settings-card">
+          <div>
+            <h3>Achievements</h3>
+            <p>
+              Your points and badges stay in this browser unless you sync them
+              with your optional account. Reset this device's progress whenever
+              you like.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="secondary-button danger-button"
+            id="resetProgress"
+          >
+            Reset progress
+          </button>
+        </div>
+        <p class="notice settings-notice">
+          <strong>Supported links:</strong> Direct HTTP or HTTPS file URLs. This
+          tool does not download or extract videos from streaming services. Use
+          the service's official download options where available.
+        </p>
+        <p
+          id="settingsStatus"
+          class="status"
+          role="status"
+          aria-live="polite"
+        ></p>
+      </section>
+    </main>
+  </body>
+</html>
