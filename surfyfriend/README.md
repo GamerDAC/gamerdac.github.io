@@ -62,7 +62,7 @@ Use `Alt+1` through `Alt+9` to open Home, Downloader, Suggested websites, Websit
 
 Connect a standard-mapped gamepad: the D-pad or left stick moves focus, A/0 activates, B/1 goes back, and Start toggles the navigation menu. Gamepad access depends on browser support and a secure browser context (HTTPS or localhost); typing website addresses still uses the keyboard. Turn on **Sound effects** in Settings to hear small locally generated navigation, XP, and achievement sounds. Sounds are off by default and no audio is sent over the network.
 
-From this project directory (`appmarket/downloader` in the current workspace), start it with:
+From this project directory, start it with:
 
 ```sh
 python3 server.py
